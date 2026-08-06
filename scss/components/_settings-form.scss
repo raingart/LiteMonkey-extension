@@ -1,0 +1,65 @@
+// scss/components/_settings-form.scss
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+#settings-form {
+   display: flex;
+   flex-direction: column;
+   gap: space(2); // Создаем зазоры между строками настроек
+
+   .form-group {
+      padding: space(3) space(4);
+      border: 1px solid var(--color-border-light);
+      border-radius: radius(md);
+      background-color: var(--color-surface);
+
+      transition: background-color var(--transition-fast),
+                  border-color var(--transition-fast),
+                  box-shadow var(--transition-fast);
+
+      &:hover:not(:focus-within) {
+         background-color: var(--color-background-alt);
+         border-color: var(--color-border);
+      }
+
+      &:focus-within {
+         border-color: var(--color-primary);
+         box-shadow: 0 0 0 1px var(--color-primary-light);
+         background-color: var(--color-surface);
+      }
+   }
+
+   .form-control-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: space(4);
+   }
+
+   .form-description {
+      font-size: 0.9em;
+      color: var(--color-text-secondary);
+      margin-top: space(1);
+      padding-right: space(8); // Не даем длинному тексту вплотную прижиматься к селекторам
+   }
+
+   .form-actions {
+      margin-top: space(6);
+      text-align: right;
+   }
+
+   select {
+      width: auto;
+   }
+
+   #badgeColor {
+      width: 60px;
+      height: 32px;
+      padding: 2px;
+      border-radius: radius(sm);
+      border: 1px solid var(--color-border);
+      cursor: pointer;
+      background-color: transparent;
+   }
+}

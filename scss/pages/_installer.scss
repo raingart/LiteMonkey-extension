@@ -1,0 +1,256 @@
+// scss/pages/_installer.scss
+//
+// Styles for the script installation confirmation page.
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+.page-installer {
+   display: flex;
+   justify-content: center;
+   align-items: flex-start;
+   min-height: 100vh;
+   padding: 4vh space(4);
+   box-sizing: border-box;
+
+   .installer {
+      width: 100%;
+      max-width: 650px;
+      transition: max-width var(--transition-normal, 0.3s ease), height var(--transition-normal, 0.3s ease);
+      background-color: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: map.get($radius, md);
+      box-shadow: map.get($shadows, md);
+      overflow: hidden;
+
+      &.has-open-code {
+         max-width: 1350px;
+         height: 88vh;
+         display: flex;
+         flex-direction: column;
+
+         .installer__main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+         }
+
+         .installer__content.has-code-view {
+            flex-grow: 1;
+            height: 100%;
+            min-height: 0;
+            grid-template-columns: minmax(320px, 1fr) minmax(0, 1.5fr);
+            align-items: stretch;
+         }
+
+         .installer__meta-panel {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow-y: auto;
+
+            .installer__actions {
+               margin-top: auto !important;
+               padding-top: space(3);
+            }
+         }
+
+         .installer__code-panel {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+
+            .code-editor-wrapper {
+               height: 100%;
+               flex-grow: 1;
+               min-height: 0;
+            }
+         }
+      }
+
+      // --- State Modifiers ---
+      .installer__loader,
+      .installer__content,
+      .installer__error {
+         display: none;
+      }
+
+      &.is-loading .installer__loader {
+         display: block;
+      }
+
+      &.is-ready .installer__content {
+         display: grid;
+         grid-template-columns: minmax(0, 1fr);
+         gap: space(4);
+         align-items: start;
+
+         &.has-code-view {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+         }
+      }
+
+      &.has-error {
+         .installer__error {
+            display: block;
+         }
+
+         #install-btn {
+            display: none;
+         }
+      }
+
+      // --- BEM Blocks ---
+      &__header {
+         padding: space(4);
+         border-bottom: 1px solid var(--color-border);
+
+         h1 {
+            margin: 0;
+            font-size: 1.4em;
+            font-weight: 600;
+         }
+      }
+
+      &__main {
+         padding: space(4);
+         min-height: 150px;
+      }
+
+      &__meta-panel {
+         display: flex;
+         flex-direction: column;
+         gap: space(3);
+         min-width: 0;
+      }
+
+      &__mobile-toggle {
+         margin-top: space(3);
+         text-align: center;
+      }
+
+      &__code-panel {
+         display: flex;
+         flex-direction: column;
+         border: 1px solid var(--color-border);
+         border-radius: map.get($radius, sm);
+         overflow: hidden;
+         background-color: var(--color-background-alt, #1e1e1e);
+         min-width: 0;
+
+         .code-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: space(2) space(3);
+            background-color: var(--color-surface-alt, rgba(0, 0, 0, 0.2));
+            border-bottom: 1px solid var(--color-border);
+            font-size: 0.9em;
+
+            .code-panel-title {
+               font-weight: 600;
+               color: var(--color-text-secondary);
+            }
+
+            .code-panel-actions {
+               display: flex;
+               align-items: center;
+               gap: space(3);
+            }
+
+            .code-line-count {
+               font-size: 0.85em;
+               opacity: 0.7;
+            }
+         }
+
+         .code-editor-wrapper {
+            height: 420px;
+            overflow: auto;
+
+            .cm-editor {
+               height: 100%;
+               font-size: 13px;
+            }
+
+            .cm-scroller {
+               overflow: auto;
+            }
+         }
+      }
+
+      &__footer {
+         padding: space(4);
+         border-top: 1px solid var(--color-border);
+         background-color: var(--color-background-alt);
+         display: flex;
+         justify-content: flex-end;
+         gap: space(3);
+      }
+
+      &__error p {
+         color: var(--color-error);
+         font-weight: 600;
+         white-space: pre-wrap;
+         margin: 0;
+      }
+
+      &__loader {
+         width: 48px;
+         height: 48px;
+         border: 5px solid var(--color-primary-light);
+         border-bottom-color: var(--color-primary);
+         border-radius: 50%;
+         margin: 40px auto;
+         animation: rotation 1s linear infinite;
+      }
+   }
+
+   .meta-grid {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      gap: space(3) space(4);
+      font-size: 1.05em;
+
+      &__key {
+         font-weight: 600;
+         color: var(--color-text-secondary);
+         text-align: right;
+      }
+
+      &__value {
+         margin: 0;
+         word-break: break-all;
+         display: flex;
+         align-items: center;
+         gap: space(2);
+
+         &.is-update .version--new {
+            color: var(--color-success);
+            font-weight: bold;
+         }
+
+         &.is-downgrade .version--new {
+            color: var(--color-warning);
+            font-weight: bold;
+         }
+      }
+   }
+
+   .version--old {
+      text-decoration: line-through;
+      opacity: 0.7;
+   }
+
+   .version--arrow {
+      color: var(--color-text-secondary);
+   }
+
+   @keyframes rotation {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+   }
+}

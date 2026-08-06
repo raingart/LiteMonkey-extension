@@ -1,0 +1,23 @@
+// scss/style.scss
+//
+// Main entry point for all custom styles in the extension.
+// This file imports all partials in the correct cascade order.
+
+// 1. Base styles (variables, themes, global element styles)
+// They don't produce any output themselves but provide tools for other files.
+@use 'base/variables';
+@use 'base/themes';
+@use 'base/global';
+
+// 2. Shared UI components (can be used on any page)
+@use 'components/panel';
+@use 'components/sidebar';
+@use 'components/editor';
+@use 'components/storage';
+@use 'components/settings-form';
+@use 'components/modal';
+
+// 3. Page-specific styles (styles unique to a particular page)
+@use 'pages/options';
+@use 'pages/popup';
+@use 'pages/installer';

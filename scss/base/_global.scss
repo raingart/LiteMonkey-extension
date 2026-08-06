@@ -1,0 +1,232 @@
+// scss/base/_global.scss
+
+// Import the built-in 'sass:map' module to use its functions
+@use 'sass:map';
+
+// Using 'as *' makes the functions (like space()) and variables available globally
+// within this file, so you don't have to write vars.space().
+@use 'variables' as *;
+
+// --- Base Component Placeholders ---
+
+// This placeholder defines the shared visual appearance for all form controls
+// like inputs, selects, textareas, and buttons.
+%form-control {
+   font-family: inherit;
+   font-size: inherit;
+   padding: space(1.5) space(2);
+   border: 1px solid var(--color-border);
+   border-radius: map.get($radius, sm);
+   background-color: var(--color-surface);
+   color: var(--color-text);
+   // Transitions are kept separate as they apply to different states (focus vs hover)
+}
+
+// --- General Element Styles ---
+
+* {
+   box-sizing: border-box;
+}
+
+body {
+   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+   font-size: 13px;
+   line-height: 1.4;
+   background-color: var(--color-background);
+   color: var(--color-text);
+   margin: 0;
+}
+
+a {
+   color: var(--color-primary);
+   transition: color var(--transition-fast);
+
+   &:hover {
+      color: var(--color-primary-dark);
+   }
+
+   &:focus-visible {
+      outline: 2px dashed var(--color-primary);
+      outline-offset: 2px;
+   }
+}
+
+[tabindex]:focus-visible {
+   outline: 2px dashed var(--color-primary);
+   outline-offset: 2px;
+}
+
+ul {
+   list-style: none;
+   padding: 0;
+   margin: 0;
+}
+
+hr {
+   border-width: 0;
+   border-top: 1px solid var(--color-border);
+}
+
+// Apply width: 100% only to text-like inputs
+input:not([type="checkbox"], [type="radio"], [type="submit"], [type="reset"], [type="button"], [type="color"], [type="image"]),
+select,
+textarea {
+   @extend %form-control;
+   width: 100%;
+
+   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+
+   &:hover:not([disabled]) {
+      border-color: var(--color-text-secondary);
+   }
+
+   &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-light);
+   }
+
+   &:invalid {
+      border: none;
+      outline: 2px solid var(--color-error);
+   }
+}
+
+select {
+   cursor: pointer;
+}
+
+button {
+   @extend %form-control;
+   cursor: pointer;
+   transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+
+   &:hover:not([disabled]) {
+      background-color: var(--color-background-alt);
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+   }
+
+   &:focus-visible {
+      outline: 2px dashed var(--color-primary);
+      outline-offset: 2px;
+   }
+
+   &:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+   }
+}
+
+// Primary button styles remain separate as they are modifiers
+.btn-primary,
+[type="submit"],
+[type="reset"] {
+   background-color: var(--color-primary);
+   border-color: var(--color-primary-dark);
+   color: white;
+
+   &:hover:not([disabled]) {
+      background-color: var(--color-primary-dark);
+      border-color: var(--color-primary-dark);
+      color: white; // Ensures legible white text on dark hover backgrounds
+   }
+}
+
+label {
+   display: block;
+   font-weight: 600;
+   color: var(--color-text);
+
+   &[for] {
+      cursor: pointer;
+      user-select: none;
+   }
+}
+
+svg {
+   fill: currentColor;
+}
+
+.hide {
+   display: none !important;
+}
+
+.sr-only {
+   position: absolute;
+   width: 1px;
+   height: 1px;
+   padding: 0;
+   margin: -1px;
+   overflow: hidden;
+   clip: rect(0, 0, 0, 0);
+   white-space: nowrap;
+   border-width: 0;
+}
+
+.toast {
+   position: fixed;
+   bottom: space(4);
+   left: 50%;
+   transform: translateX(-50%);
+   background-color: #333;
+   color: white;
+   padding: space(3) space(4);
+   border-radius: radius(md);
+   box-shadow: shadow(sm);
+   z-index: 1000;
+   opacity: 0;
+   visibility: hidden;
+   transition: all var(--transition-fast);
+
+   &.show {
+      opacity: 1;
+      visibility: visible;
+   }
+}
+
+.warning-message {
+   background-color: var(--color-primary-light);
+   border: 1px solid var(--color-border);
+   color: var(--color-text);
+   padding: space(3);
+   border-radius: radius(sm);
+   text-align: center;
+   font-style: italic;
+
+   &::before {
+      content: "⚠️";
+      margin-right: .5rem;
+      vertical-align: middle;
+   }
+}
+
+// --- Component-like Patterns ---
+
+// A wrapper for a checkbox and its label to treat them as a single unit,
+// especially for tooltips and alignment.
+.checkbox-wrapper {
+   display: inline-flex;
+   align-items: center;
+   gap: space(2);
+   cursor: pointer;
+}
+
+// --- Browser Specific Resets ---
+
+// Reset the default appearance of the search input in WebKit browsers.
+// This removes the native "x" clear button and search icon, allowing
+// our custom components to work without visual conflicts.
+input[type="search"] {
+
+   // Remove the native clear button ('x')
+   &::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      display: none;
+   }
+
+   // Remove the native search icon (magnifying glass)
+   &::-webkit-search-decoration {
+      -webkit-appearance: none;
+   }
+}

@@ -1,0 +1,35 @@
+// scss/components/_panel.scss
+//
+// Generic styles for panel containers used throughout the UI.
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+.panel {
+   background-color: var(--color-surface);
+   outline: 1px solid var(--color-border);
+   border-radius: map.get($radius, md);
+   box-shadow: map.get($shadows, md);
+   overflow: hidden;
+   display: flex;
+   flex-direction: column;
+}
+
+.panel-header {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   padding: space(2) space(3);
+   border-bottom: 1px solid var(--color-border);
+
+   h2 {
+      margin: 0;
+      font-size: 1.2em;
+   }
+}
+
+.panel-content {
+   padding: space(3);
+   overflow-y: auto;
+   flex-grow: 1;
+}

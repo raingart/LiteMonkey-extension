@@ -1,0 +1,59 @@
+// scss/components/_modal.scss
+//
+// Styles for a generic modal dialog component.
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+.modal {
+   position: fixed;
+   inset: 0;
+   background-color: rgba(0, 0, 0, 0.5);
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   z-index: 1000;
+}
+
+.modal-content {
+   background-color: var(--color-surface);
+   border-radius: map.get($radius, md);
+   width: 95vw;
+   max-width: 800px;
+   max-height: 90vh;
+   display: flex;
+   flex-direction: column;
+   overflow: hidden;
+   box-shadow: map.get($shadows, lg);
+}
+
+.modal-header {
+   padding: space(2) space(3);
+   flex-shrink: 0;
+   border-bottom: 1px solid var(--color-border);
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+
+   h2 {
+      font-size: 1.1em;
+      margin: 0;
+   }
+}
+
+.modal-body {
+   flex-grow: 1;
+   overflow-y: auto;
+   padding: space(2);
+   background-color: var(--color-code-background);
+}
+
+.modal-footer {
+   padding: space(2) space(3);
+   flex-shrink: 0;
+   border-top: 1px solid var(--color-border);
+   display: flex;
+   justify-content: flex-end;
+   gap: space(2);
+   background-color: var(--color-surface);
+}

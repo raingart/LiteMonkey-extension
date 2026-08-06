@@ -1,0 +1,193 @@
+// scss/pages/_options.scss
+//
+// Defines the main grid layout for the options page and styles for its core sections.
+// Imports shared components like panels.
+
+@use '../base/variables' as *;
+
+// --- Layout ---
+
+.page-options {
+
+   .layout-wrapper {
+      padding: space(3);
+   }
+
+   .container {
+      height: calc(100vh - space(3) * 2);
+      display: grid;
+      gap: space(4);
+      grid-template-columns: minmax(340px, 1.2fr) 2.5fr minmax(380px, 1.5fr);
+      grid-template-rows: auto 1fr;
+      grid-template-areas:
+         "sidebar header storage"
+         "sidebar editor storage";
+
+      // --- Grid Area Assignments ---
+      .header {
+         grid-area: header;
+      }
+
+      .sidebar {
+         grid-area: sidebar;
+      }
+
+      .editor {
+         grid-area: editor;
+      }
+
+      .storage {
+         grid-area: storage;
+      }
+
+      .settings {
+         grid-area: settings;
+         display: none; // Hidden by default
+      }
+
+      // --- Settings Mode Modifier ---
+      &.settings-mode {
+         grid-template-areas:
+            "sidebar header ."
+            "sidebar settings .";
+
+         .editor,
+         .storage {
+            display: none;
+         }
+
+         .settings {
+            display: flex;
+         }
+      }
+   }
+
+   // --- Specific Section Styles ---
+
+   // Header Panel
+   .header {
+      flex-direction: column;
+
+      h1 {
+         margin: 0;
+         font-size: 1.5em;
+         font-weight: 600;
+      }
+
+      .header-actions {
+         display: flex;
+         gap: space(2);
+      }
+   }
+
+   // Editor Panel
+   .editor {
+      form {
+         display: flex;
+         flex-direction: column;
+         height: 100%;
+      }
+   }
+
+   // Settings Panel
+   .settings {
+      padding: space(2);
+   }
+
+   // --- Responsive Overrides ---
+
+   @media (max-width: 1400px) {
+      .container {
+         grid-template-columns: minmax(280px, 1fr) 3fr;
+         grid-template-rows: auto 1fr auto;
+         grid-template-areas:
+            "sidebar header"
+            "sidebar editor"
+            "sidebar storage";
+
+         &.settings-mode {
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+               "sidebar header"
+               "sidebar settings";
+         }
+      }
+   }
+
+   @media (max-width: 900px) {
+      .layout-wrapper {
+         padding: space(2);
+      }
+
+      .container {
+         grid-template-columns: 1fr;
+         grid-template-rows: auto auto 1fr auto;
+         grid-template-areas:
+            "header"
+            "sidebar"
+            "editor"
+            "storage";
+         height: auto;
+
+         &.settings-mode {
+            grid-template-rows: auto auto 1fr;
+            grid-template-areas:
+               "header"
+               "sidebar"
+               "settings";
+         }
+      }
+
+      .sidebar {
+         max-height: 40vh;
+      }
+
+      .editor {
+         min-height: 50vh;
+      }
+   }
+}
+
+// --- Drag-and-Drop Drop Zone ---
+.drop-zone {
+   position: fixed;
+   inset: 0;
+   background-color: rgba(0, 0, 0, 0.4);
+   backdrop-filter: blur(4px);
+   z-index: 9999;
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   color: white;
+   transition: opacity var(--transition-fast);
+
+   &__content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: space(3);
+      padding: space(6) space(10);
+      border: 3px dashed var(--color-primary);
+      border-radius: radius(md);
+      background-color: rgba(20, 20, 20, 0.92);
+      box-shadow: shadow(lg);
+      text-align: center;
+
+      p {
+         margin: 0;
+         font-size: 1.25rem;
+         font-weight: 600;
+         color: var(--color-text-secondary);
+      }
+
+      svg {
+         fill: var(--color-primary);
+         animation: bounce-cloud 1.6s infinite ease-in-out;
+      }
+   }
+}
+
+@keyframes bounce-cloud {
+   0%, 100% { transform: translateY(0); }
+   50% { transform: translateY(-8px); }
+}

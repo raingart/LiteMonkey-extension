@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <title>__MSG_installer_page_title__</title>
+   <link rel="stylesheet" href="/css/style.css">
+   <script type="module" src="/js/theme-applier.js"></script>
+</head>
+
+<body class="page-installer">
+   <div class="installer is-loading" role="dialog" aria-labelledby="installer-title">
+      <header class="installer__header">
+         <h1 id="installer-title">__MSG_installer_title__</h1>
+      </header>
+
+      <main class="installer__main" aria-live="polite">
+         <div class="installer__loader" role="status" aria-label="Loading script data..."></div>
+
+         <div id="content" class="installer__content">
+            <!-- Left Panel: Metadata details, warnings & action buttons -->
+            <div class="installer__meta-panel">
+               <dl id="meta-list" class="meta-grid"></dl>
+               <div id="installer-warnings" class="hide" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;"></div>
+               
+               <div class="installer__actions" style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
+                  <button id="install-btn" class="btn-primary" disabled>__MSG_installer_btn_install__</button>
+                  <button id="cancel-btn" class="btn-secondary">__MSG_installer_btn_cancel__</button>
+                  <button id="toggle-source-btn" class="btn-secondary btn-compact" style="margin-left: auto;">__MSG_installer_btn_view_source__</button>
+               </div>
+            </div>
+
+            <!-- Right Panel: CodeMirror syntax-highlighted source preview -->
+            <div id="source-code-container" class="installer__code-panel hide">
+               <div class="code-panel-header">
+                  <span class="code-panel-title">Source Code Preview</span>
+                  <div class="code-panel-actions">
+                     <span id="code-line-count" class="code-line-count"></span>
+                     <button type="button" id="copy-source-btn" class="btn-compact btn-secondary">Copy Code 📋</button>
+                  </div>
+               </div>
+               <div id="source-code-editor" class="code-editor-wrapper"></div>
+               <textarea id="source-code-preview" class="hide" readonly spellcheck="false"></textarea>
+            </div>
+         </div>
+
+         <div class="installer__error">
+            <p id="error-message"></p>
+         </div>
+      </main>
+
+   </div>
+
+   <script type="module" src="/js/pages/installer.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,134 @@
+/* template */
+input[type=checkbox]:not(.default-checkbox) {
+   /* color ================== */
+   /* --color-checked: deepskyblue; */
+   /* --color-checked: #188cc3; */
+   /* --color-checked: #27a6e5; */
+   --color-checked: #00b7fc;
+   /* --color-checked: #4cd964; */
+   /* --color-checked: #4CAF50; */
+   /* --color-checked: #717171; */
+   --color-checked: var(--color-primary);
+
+   /* --color-bg: #aaa; */
+   --color-bg: #ddd;
+   /* --color-bg: #8f8f8f; */
+   /* --color-bg: var(--color-text-secondary); */
+
+
+   /* size ================== */
+   /* --height: 1em;
+   --width: 2.2em; */
+
+   /* --height: 1.2em;
+   --width: 2.5em; */
+
+   /* --height: 1.2em;
+   --width: 2.8em; */
+
+   /* --height: 1.3em;
+   --width: 2.6em; */
+
+   /* --height: 1.4em;
+   --width: 2.8em; */
+
+   --height: 1.65em;
+   --width: 3.1em;
+
+   /* --height: 1.4em;
+   --width: 3.1em; */
+
+   /* scale ================== */
+   /* --scale: .8; */
+   --scale: .9;
+   /* --scale: 1.2; */
+   /* --scale: 1.5; */
+}
+
+input[type=checkbox]:not(.default-checkbox) {
+   min-width: var(--width);
+   width: var(--width);
+}
+
+input[type=checkbox]:not(.default-checkbox):after {
+   scale: var(--scale);
+}
+
+/* ================== */
+
+input[type=checkbox]:not(.default-checkbox) {
+   --opacity: .7;
+   --color: #fff;
+   /* [FIX] Use a variable for the thumb color */
+   /* --color: var(--color-surface); */
+   /* [NEW] Add a subtle border for better contrast on dark themes */
+   border: 1px solid var(--color-border-light);
+
+   background-color: var(--color-bg);
+   height: var(--height);
+   line-height: 1.6em;
+   border-radius: 3em;
+   appearance: none;
+   -webkit-appearance: none;
+   position: relative;
+   cursor: pointer;
+   outline: none;
+   border: none;
+}
+
+input[type=checkbox]:not(.default-checkbox):checked {
+   background-color: var(--color-checked);
+   /* [NEW] Remove the border when checked for a cleaner look */
+   border-color: transparent;
+}
+
+input[type=checkbox]:not(.default-checkbox):after {
+   position: absolute;
+   top: 0;
+   left: 0;
+   content: "";
+   width: var(--height);
+   height: var(--height);
+   border-radius: 50%;
+   background-color: var(--color);
+   box-shadow: 0 0 .25em rgba(0, 0, 0, .3);
+   /* box-shadow: 0 .1em .25em #999999; */
+}
+
+input[type=checkbox]:not(.default-checkbox):checked:after {
+   left: calc(100% - var(--height));
+}
+
+input[type=checkbox]:not(.default-checkbox)[disabled] {
+   cursor: not-allowed;
+}
+
+input[type=checkbox]:not(.default-checkbox)[disabled]:after {
+   opacity: var(--opacity);
+}
+
+input[type=checkbox]:not(.default-checkbox):checked[disabled] {
+   background-color: #b0d7f5;
+}
+
+input[type=checkbox]:not(.default-checkbox):focus,
+input[type=checkbox]:not(.default-checkbox):focus:after {
+   transition: all 200ms ease-in-out;
+}
+
+/* add status text */
+/* input[type=checkbox]:not(.default-checkbox):before {
+   float: right;
+   content: "OFF";
+   color: #767778;
+   font-size: .7em;
+   margin-right: 5%;
+   opacity: var(--opacity);
+}
+
+input[type=checkbox]:not(.default-checkbox):checked:before {
+   float: left;
+   content: "ON";
+   color: var(--color);
+   margin-left: 10%;
+} */

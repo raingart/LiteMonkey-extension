@@ -1,0 +1,425 @@
+// scss/components/_sidebar.scss
+//
+// Styles for the script list sidebar, including header, controls, and list items.
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+.sidebar-header {}
+
+.sidebar-actions {
+   display: flex;
+   gap: space(2);
+}
+
+.script-list-controls {
+   display: flex;
+   gap: space(2);
+   justify-content: space-between;
+   align-items: center;
+   padding: space(1) space(2);
+   border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-search {
+   flex-grow: 1;
+   position: relative;
+   display: flex;
+   align-items: center;
+
+   .search-icon {
+      position: absolute;
+      left: 10px;
+      pointer-events: none;
+      fill: var(--color-text-secondary);
+      opacity: 0.7;
+   }
+
+   input[type="search"] {
+      width: 100%;
+      padding-left: 32px;
+   }
+}
+
+#script-list {
+   list-style: none;
+   margin: 0;
+   padding: space(1) 0;
+   flex-grow: 1;
+   overflow-y: auto;
+}
+
+.item {
+   display: grid;
+   // Defines two main columns: a fixed one for the icon, and a flexible one for everything else.
+   grid-template-columns: auto 1fr;
+   gap: 0 space(2);
+   align-items: center;
+   padding: space(2) space(2);
+   border-left: 3px solid transparent;
+   border-bottom: 1px solid var(--color-border-light);
+   cursor: pointer;
+   user-select: none; // Prevents native text selection during drag-and-drop
+   transition: background-color var(--transition-fast);
+   position: relative; // Needed for the 'is-newly-updated' pseudo-element
+
+   // Apply grabbing cursor strictly during active drag operation
+   &.sortable-drag,
+   &.sortable-ghost {
+      cursor: grabbing !important;
+   }
+
+   &:last-child {
+      border-bottom: none;
+   }
+
+   &:hover {
+      background-color: var(--color-primary-light);
+   }
+
+   &.selected {
+      background-color: var(--color-primary-light);
+      border-left-color: var(--color-primary);
+
+      .script-label {
+         font-weight: 600;
+      }
+
+      &.unsaved {
+         border-left-color: var(--color-notice);
+      }
+   }
+
+   &.is-newly-updated {
+      border-left-color: var(--color-notice-border);
+      transition: background-color 0.5s ease-in-out;
+
+      &::after {
+         content: 'Updated';
+         position: absolute;
+         top: 4px;
+         right: 4px;
+         font-size: 0.6rem;
+         font-weight: bold;
+         color: #005a9e;
+         background-color: var(--color-notice);
+         padding: 1px 4px;
+         border-radius: 4px;
+      }
+   }
+
+   &.error {
+      border-left-color: var(--color-error) !important;
+   }
+
+   // --- Styling for virtual scripts stored ONLY in cloud storage ---
+   &.is-cloud-only {
+      opacity: 0.65;
+      border-left: 3px dashed var(--color-text-secondary);
+      background-color: var(--color-background);
+
+      .script-type-icon.cloud-virtual {
+         opacity: 0.8;
+         filter: grayscale(1);
+         font-size: 1.1em;
+      }
+
+      .script-label {
+         font-style: italic;
+         color: var(--color-text-secondary);
+      }
+
+      // Hide local active checkboxes for cloud-only script rows
+      input,
+      .script-mute {
+         display: none;
+      }
+
+      &:hover {
+         opacity: 0.9;
+         background-color: var(--color-background-alt);
+      }
+   }
+
+   // --- Native unified Google Drive status button styles ---
+
+   // 1. Static successful synchronization icon (green indicator)
+   .gdrive-status-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: space(1);
+      user-select: none;
+
+      svg {
+         width: 18px;
+         height: 18px;
+         fill: var(--color-success) !important; // Green status color
+      }
+   }
+
+   // 2. Interactive cloud action buttons (Upload, Download, Delete)
+   .gdrive-action-btn {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      outline: none !important;
+      padding: space(1) !important;
+
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.7; // Slightly visible resting opacity to stay informative without distraction
+      transition: opacity var(--transition-fast), transform var(--transition-fast);
+      border-radius: radius(sm);
+
+      svg {
+         width: 18px;
+         height: 18px;
+         transition: fill var(--transition-fast);
+      }
+
+      // Idle color indicators for quick status scanning
+      &.not_synced svg {
+         fill: var(--color-text-secondary) !important; // Grey (unlinked)
+      }
+
+      &.local_newer svg {
+         fill: var(--color-primary) !important; // Deep blue (upload recommended)
+      }
+
+      &.cloud_newer svg {
+         fill: var(--color-warning) !important; // Deep orange (download recommended)
+      }
+
+      &.cloud_only svg {
+         fill: #4db8f4 !important; // Light blue (available in cloud only)
+      }
+
+      // Hover styles for direct button interaction
+      &:hover:not([disabled]) {
+         opacity: 1 !important;
+         background: transparent !important;
+         border: none !important;
+         transform: scale(1.18); // Soft zoom effect on hover
+      }
+
+      &:active:not([disabled]) {
+         transform: scale(0.9);
+      }
+
+      // Hover icon fill colors
+      &.upload-btn:hover svg {
+         fill: var(--color-primary) !important;
+      }
+
+      &.download-btn:hover svg {
+         fill: var(--color-success) !important;
+      }
+
+      &.delete-cloud-btn:hover svg {
+         fill: var(--color-error) !important;
+      }
+   }
+
+   // Container for virtual cloud-only script controls (download + delete)
+   .gdrive-controls-cloud-only {
+      display: flex;
+      align-items: center;
+      gap: space(1);
+   }
+
+   // --- Grid Item Styles ---
+
+   .script-type-icon {
+      grid-column: 1;
+      grid-row: 1; // Positioned in the first row
+      font-size: 1.2em;
+      line-height: 1;
+
+      img {
+         width: 1.2em;
+         height: 1.2em;
+         object-fit: contain;
+      }
+   }
+
+   .script-main-info {
+      grid-column: 2;
+      grid-row: 1; // Positioned in the first row
+      display: flex;
+      flex-direction: column;
+      min-width: 0; // Crucial for text truncation
+      gap: space(0.5);
+
+      .script-label {
+         font-weight: 600;
+         line-height: 1.3;
+         cursor: pointer;
+
+         // single-line truncation styles
+         // overflow: hidden;
+         // text-overflow: ellipsis;
+         // white-space: nowrap;
+
+         // Multi-line truncation (limits text to 2 lines)
+         display: -webkit-box;
+         -webkit-line-clamp: 2;
+         -webkit-box-orient: vertical;
+         overflow: hidden;
+         word-break: break-word;
+
+         mark {
+            background-color: var(--color-notice);
+            color: var(--color-text);
+            border-radius: map.get($radius, sm);
+         }
+      }
+
+      .script-meta {
+         display: flex;
+         align-items: center;
+         gap: space(1.5);
+         font-size: 0.9em;
+         color: var(--color-text-secondary);
+         white-space: nowrap;
+
+         .author-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+         }
+
+         .error-indicator,
+         .support-link svg {
+            font-size: 1.1em;
+            max-height: 1.2em;
+            max-width: 1.2em;
+         }
+
+         .support-link {
+            display: inline-flex; // To align the SVG correctly
+            align-items: center;
+            color: inherit; // Inherits var(--color-text-secondary)
+
+            // Highlight support link with primary accent color on hover
+            &:hover {
+               color: var(--color-primary);
+            }
+         }
+      }
+   }
+
+   .script-actions {
+      grid-column: 1 / -1; // Span across all columns
+      grid-row: 2; // Positioned in the second row
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: space(1);
+      // padding-left: calc(1.2em + #{space(2)}); // Indent to align with main info
+
+      .script-meta-secondary {
+         display: flex;
+         align-items: center;
+         gap: space(1.5);
+         font-size: 0.85em;
+         color: var(--color-text-secondary);
+         white-space: nowrap;
+         overflow: hidden;
+
+         >span:not(:first-child)::before {
+            content: '•';
+            margin-right: space(1.5);
+            color: var(--color-border);
+         }
+      }
+
+      .script-controls {
+         display: flex;
+         align-items: center;
+         gap: space(2);
+         flex-shrink: 0;
+      }
+   }
+
+   // --- Shared styles for remove button and indicators ---
+   .script-remove-btn {
+      opacity: 0.6;
+      display: flex;
+      cursor: pointer;
+      transition: opacity 0.2s;
+
+      svg {
+         fill: var(--color-svg);
+         transition: fill 0.2s;
+      }
+
+      &:hover {
+         opacity: 1;
+         background-color: rgba(239, 68, 68, 0.1);
+         border-radius: map.get($radius, sm);
+
+         svg {
+            fill: var(--color-error);
+         }
+      }
+   }
+
+   .error-indicator {
+      font-size: 1.2em;
+      cursor: help;
+      user-select: none;
+
+      &.require-error {
+         cursor: pointer;
+      }
+
+      // Static analysis anomaly warning indicators (e.g., eval or obfuscation)
+      &.anomaly-warning {
+         color: var(--color-notice-border, #ffc107);
+         margin-left: space(1);
+         animation: pulse-warning 2s infinite;
+      }
+   }
+
+   @keyframes pulse-warning {
+      0% {
+         opacity: 0.8;
+      }
+
+      50% {
+         opacity: 1;
+      }
+
+      100% {
+         opacity: 0.8;
+      }
+   }
+
+   // --- Drag and Drop Feedback ---
+   &.sortable-ghost {
+      opacity: 0.4;
+      background-color: var(--color-primary-light);
+      border: 2px dashed var(--color-primary);
+   }
+
+   &.sortable-fallback {
+      opacity: 0.95;
+      background-color: var(--color-background);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      pointer-events: none;
+   }
+
+   // --- Responsive Behavior ---
+   @media (max-width: 420px) {
+      .script-actions {
+         .script-meta-secondary {
+            display: none; // Hide version, date, size
+         }
+
+         // Push controls to the far right
+         justify-content: flex-end;
+      }
+   }
+}

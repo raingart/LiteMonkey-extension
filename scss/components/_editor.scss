@@ -1,0 +1,140 @@
+// scss/components/_editor.scss
+//
+// Styles for the script editor component, including CodeMirror and the URL tester.
+
+@use '../base/variables' as *;
+
+.editor-header {
+   .editor-controls {
+      display: flex;
+      align-items: center;
+      gap: space(3);
+   }
+
+   label {
+      white-space: nowrap;
+      color: var(--color-text-secondary);
+      font-size: 0.9em;
+   }
+}
+
+.editor-code-wrapper {
+   flex-grow: 1;
+   min-height: 0;
+
+   // Styles for the plain textarea editor
+   &:has(textarea:not(.hide)) {
+      padding: space(2) space(4);
+   }
+
+   #script-code {
+      width: 100%;
+      height: 100%;
+      resize: none;
+      border: none;
+      padding: 0;
+      font-family: "Courier New", Courier, monospace;
+      background-color: transparent; // Inherit background from wrapper
+   }
+}
+
+// --- CodeMirror Specific Styles ---
+#editor-container {
+   height: 100%;
+   overflow: auto;
+   outline: 1px solid var(--color-border);
+}
+
+.cm-editor {
+   height: 100%;
+}
+
+// Theme override to make CodeMirror background transparent
+.ͼo {
+   background: none;
+
+   .cm-gutters {
+      background: none;
+      border-right: 1px solid var(--color-border);
+   }
+}
+
+// --- URL Rules & Tester ---
+.editor-urls-wrapper {
+   padding: space(4);
+   padding-top: space(2);
+   border-top: 1px solid var(--color-border);
+
+   .editor-urls-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: space(1.5);
+
+      label {
+         font-size: 0.9em;
+         color: var(--color-text-secondary);
+         margin: 0;
+      }
+
+      button {
+         padding: space(0.5) space(2);
+         font-size: 0.85em;
+         background-color: var(--color-background-alt);
+         border: 1px solid var(--color-border);
+      }
+   }
+}
+
+.pattern-tester {
+   display: flex;
+   align-items: center;
+   gap: space(2);
+   margin-top: space(3);
+
+   input[type="url"] {
+      font-family: monospace;
+   }
+
+   .test-result {
+      font-weight: 600;
+      font-size: 0.9em;
+      min-width: 150px;
+      text-align: center;
+      white-space: nowrap;
+   }
+}
+
+// --- Shared Component: Input with a clear button ---
+// Used in sidebar search and pattern tester
+.input-with-clear {
+   position: relative;
+   display: flex;
+   flex-grow: 1;
+   align-items: center;
+
+   input {
+      padding-right: 28px; // Make space for the button
+   }
+
+   .clear-btn {
+      position: absolute;
+      right: 5px;
+      // Vertically center the button
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.4em;
+      line-height: 1;
+      padding: 0 4px;
+      color: var(--color-text-secondary);
+      opacity: 0.7;
+      transition: opacity 0.2s;
+
+      &:hover {
+         opacity: 1;
+      }
+   }
+}

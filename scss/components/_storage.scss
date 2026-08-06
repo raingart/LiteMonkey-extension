@@ -1,0 +1,105 @@
+// scss/components/_storage.scss
+//
+// Styles for the collapsible storage panel.
+
+@use '../base/variables' as *;
+
+.storage {
+
+   // Modifier for the collapsed state
+   &.is-collapsed {
+      .storage-caret {
+         transform: rotate(-90deg);
+      }
+
+      .storage-content {
+         max-height: 0;
+         padding-top: 0;
+         padding-bottom: 0;
+         opacity: 0;
+         visibility: hidden;
+         transition: all var(--transition-fast);
+      }
+   }
+
+   // Responsive behavior for the panel itself
+   @media (max-width: 1400px) {
+      &:not(.is-collapsed) {
+         min-height: 84vh; // This might need review, but preserving original behavior
+      }
+
+      .storage-caret {
+         display: block;
+      }
+   }
+}
+
+.storage-header {
+   cursor: pointer;
+   user-select: none;
+}
+
+.storage-caret {
+   transition: transform var(--transition-fast);
+   display: none; // Hidden by default, shown on smaller screens
+}
+
+.storage-content {
+   padding: 0 space(4) space(4);
+   overflow: hidden;
+   display: flex;
+   flex-direction: column;
+   flex-grow: 1;
+   min-height: 0;
+}
+
+#storage-data {
+   resize: vertical;
+   flex-grow: 1;
+
+   // Modifier for invalid JSON
+   &.invalid-json {
+      border-color: var(--color-error);
+      box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.2);
+   }
+}
+
+#storage-container {
+   flex-grow: 1;          // Заставляем блок занять всё свободное пространство по вертикали
+   min-height: 250px;     // Задаем минимальный порог, чтобы блок не схлопывался
+   outline: 1px solid var(--color-border);
+   border-radius: radius(sm);
+   margin-bottom: space(2);
+   overflow: hidden;      // Предотвращает появление двойных полос прокрутки
+
+   // Внутренний скроллер CodeMirror растягиваем на 100% высоты родителя
+   .cm-editor {
+      height: 100%;
+   }
+
+   &.invalid-json {
+      border-color: var(--color-error);
+      box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.2);
+   }
+}
+
+.storage-controls {
+   display: flex;
+   align-items: center;
+   gap: space(2);
+   margin-top: space(2);
+   flex-shrink: 0; // Предотвращает сплющивание панели управления при нехватке высоты
+}
+
+// Generic form error message style (used here and potentially elsewhere)
+.form-error-message {
+   display: block;
+   color: var(--color-error);
+   font-size: 0.9em;
+   min-height: 1.2em;
+   flex-shrink: 0; // Предотвращает сплющивание строки ошибок
+
+   &:empty {
+      display: none;
+   }
+}

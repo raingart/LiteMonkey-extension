@@ -1,0 +1,171 @@
+// scss/base/_variables.scss
+
+@use "sass:map";
+
+// --- Base Unit and Spacing Function ---
+$base-unit: 4px;
+
+// Gets spacing values. Example: space(2) -> 8px
+@function space($multiplier) {
+   @return $base-unit * $multiplier;
+}
+
+// Gets radius values from the $radius map. Example: radius(sm) -> 4px
+@function radius($key) {
+   @return map.get($radius, $key);
+}
+
+// Gets shadow values from the $shadows map. Example: shadow(md) -> 0 2px 8px ...
+@function shadow($key) {
+   @return map.get($shadows, $key);
+}
+
+
+// --- Basic palette in SCSS variables ---
+$blue: #27a6e5;
+$dark-blue: #1d8dc5;
+$light-blue: #e6f5fc;
+
+// --- SCSS map for light theme (default) ---
+$theme-light: (
+   "primary": $blue,
+   "primary-dark": $dark-blue,
+   "primary-light": $light-blue,
+   "background": #f8f9fa,
+   "background-alt": #f1f1f1,
+   "surface": #ffffff,
+   "border": #e0e0e0,
+   "border-light": rgba(224, 224, 224, 0.7),
+   "svg": #6c757d,
+   "text": #212529,
+   "text-secondary": #606770,
+   "error": #e63946,
+   "warning": #fd7e14,
+   "notice": #ffc107,
+   "notice-border": #e0a800,
+   "success": #28a745,
+   "log-debug": #118ab2,
+   "log-info": #06d6a0,
+   "log-warn": #ffd166,
+   "log-error": #ff6b6b,
+   "code-background": #212529,
+   "code-text": #e6f5fc
+);
+
+// --- SCSS maps for other topics ---
+$theme-light-milk: (
+   "background": #f4f4f9,
+   "border-light": #ddd,
+   "border": #ccc,
+   "surface": #f4f4f4
+);
+
+$theme-dark-gray: (
+   "primary": #27a6e5,
+   "primary-dark": #188cc3,
+   "primary-light": #303030,
+   "background": #1c1c1c,
+   "background-alt": #292929,
+   "border-light": rgba(74, 74, 74, 0.7),
+   "border": #3d3d3d,
+   "surface": #303030,
+   "text": #e2e8f0,
+   "text-secondary": #8c8b8b,
+   "code-background": #171717,
+   "code-text": #e6f5fc
+);
+
+$theme-dark-blue: (
+   "primary": #3a9fe8,
+   "primary-dark": #188cc3,
+   "primary-light": #242c3d,
+   "background": #121826,
+   "background-alt": #161c28,
+   "border": #2d3748,
+   "border-light": rgba(45, 55, 72, 0.7),
+   "surface": #1a202c,
+   "text": #e2e8f0,
+   "text-secondary": #a0aec0,
+   "error": #f56565,
+   "warning": #ed8936,
+   "notice": #ed8936,
+   "notice-border": #dd6b20,
+   "success": #38a169,
+   "code-background": #1e293b,
+   "code-text": #e2e8f0
+);
+
+$theme-dark-green: (
+   "primary": #2a9d8f,
+   "primary-dark": #1d6f65,
+   "primary-light": #3e3e3e,
+   "background": #121418,
+   "background-alt": #1a1e24,
+   "border": #2c3138,
+   "border-light": rgba(60, 65, 75, 0.6),
+   "surface": #1e242b,
+   "text": #e4e6eb,
+   "text-secondary": #a1a5ab,
+   "error": #f87171,
+   "warning": #f6ad55,
+   "notice": #ecc94b,
+   "notice-border": #b7791f,
+   "success": #48bb78,
+   "code-background": #0f1419,
+   "code-text": #e4e6eb
+);
+
+$theme-darken-gray: (
+   "primary": #4db8f4,
+   "primary-dark": #27a6e5,
+   "primary-light": #1a3a52,
+   "background": #1a1a1a,
+   "background-alt": #202020,
+   "border": #3d3d3d,
+   "border-light": #333333,
+   "surface": #242424,
+   "text": #e0e0e0,
+   "text-secondary": #a0a0a0,
+   "error": #ff6b6b,
+   "warning": #ffa94d,
+   "notice": #ffd166,
+   "notice-border": #cc9a06,
+   "success": #51cf66,
+   "code-background": #0d1117,
+   "code-text": #e6f5fc
+);
+
+$spacing: (
+   "0": 0,          // 0px
+   "px": 1px,       // 1px (for fine-tuning borders, etc.)
+   "0.5": space(0.5), // 2px
+   "1": space(1),   // 4px (xs)
+   "1.5": space(1.5), // 6px
+   "2": space(2),   // 8px (sm)
+   "2.5": space(2.5), // 10px
+   "3": space(3),   // 12px (md)
+   "4": space(4),   // 16px (lg)
+   "5": space(5),   // 20px
+   "6": space(6),   // 24px (xl)
+   "7": space(7),   // 28px
+   "8": space(8),   // 32px
+   "10": space(10), // 40px
+   "12": space(12)  // 48px
+);
+
+$radius: (
+   "sm": space(1),   // 4px
+   "md": space(1.5)  // 6px
+);
+
+$shadows: (
+  // box-shadow: <offset-x> | <offset-y> | <blur-radius> | <spread-radius> | <color>
+  "sm": 0 space(0.25) space(0.75) rgba(0, 0, 0, 0.1), // 0 1px 3px
+  "md": 0 space(0.5) space(2) rgba(0, 0, 0, 0.15),   // 0 2px 8px
+  "lg": 0 space(1) space(4) rgba(0, 0, 0, 0.2)      // 0 4px 16px
+);
+
+$transitions: (
+   "fast": .15s ease,
+   "medium": .3s ease
+);

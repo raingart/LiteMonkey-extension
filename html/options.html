@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Lite Monkey Options</title>
+   <link rel="stylesheet" href="/css/libs/normalize.min.css">
+
+   <link rel="stylesheet" href="/css/libs/tooltip/tooltip.min.css">
+   <link rel="stylesheet" href="/css/libs/tooltip/tooltip-animation.min.css">
+
+   <link rel="stylesheet" href="/css/libs/switch_checkbox.css">
+
+   <!-- <link rel="stylesheet" href="/css/-theme.css">
+   <link rel="stylesheet" href="/css/-global.css">
+   <link rel="stylesheet" href="/css/-options.css"> -->
+   <link rel="stylesheet" href="/css/style.css">
+
+   <script type="module" src="/js/theme-applier.js"></script>
+</head>
+
+<body class="page-options">
+   <div class="layout-wrapper">
+      <div class="container">
+
+         <header class="panel header">
+            <div class="panel-header">
+               <h1>__MSG_app_name__</h1>
+               <div class="header-actions">
+                  <button id="settings-btn">__MSG_opt_btn_open_settings__</button>
+                  <button id="scripts-import">__MSG_opt_btn_import_settings__</button>
+                  <button id="scripts-export">__MSG_opt_btn_export_settings__</button>
+               </div>
+            </div>
+         </header>
+
+         <!-- Sidebar: Displays the list of installed scripts and provides controls for managing them -->
+         <aside class="panel sidebar">
+            <!-- Sidebar Header: Contains the section title and primary actions like 'New Script' and 'Check for Updates' -->
+            <div class="sidebar-header panel-header">
+               <h2>__MSG_opt_sidebar__</h2>
+               <div class="sidebar-actions">
+                  <button id="check-updates-btn" tooltip="__MSG_opt_btn_check_updates_tooltip__" flow="down">
+                     __MSG_opt_btn_check_updates__
+                  </button>
+
+                  <button id="gdrive-sync-btn" tooltip="__MSG_opt_btn_gdrive_sync_tooltip__" flow="left">
+                     __MSG_opt_btn_gdrive_sync__
+                  </button>
+
+                  </button>
+                  <button id="script-new-btn" class="btn-primary" tooltip="__MSG_tooltip_new_script__" flow="left">
+                     <!-- __MSG_opt_btn_new_script__ -->
+                     <!-- <svg width="20" height="20" aria-hidden="true"><use xlink:href="#iconAdd"></use></svg> -->
+                     +
+                  </button>
+               </div>
+            </div>
+
+            <!-- Search / Sort the script list -->
+            <div class="script-list-controls">
+               <div class="sidebar-search input-with-clear">
+                  <svg class="search-icon" width="18" height="18" aria-hidden="true"><use xlink:href="#iconSearch"></use></svg>
+                  <input type="search" id="script-search" placeholder="__MSG_search_placeholder__" autocomplete="off">
+                  <button type="button" id="clear-script-search-btn" class="clear-btn hide" aria-label="Clear search">&times;</button>
+               </div>
+               <div class="sidebar-sort">
+                  <select id="script-sort" title="__MSG_sort_by_tooltip__">
+                     <option value="position">__MSG_sort_manual__</option> <!-- for Drag-n-Drop -->
+                     <option value="name-asc">__MSG_sort_name_asc__</option>
+                     <option value="name-desc">__MSG_sort_name_desc__</option>
+                     <option value="enabled">__MSG_sort_enabled_first__</option>
+                     <option value="updated">__MSG_sort_last_updated__</option>
+                  </select>
+               </div>
+            </div>
+
+            <!-- Script list -->
+            <ul id="script-list"></ul>
+         </aside>
+
+         <!-- Editor -->
+         <main class="panel editor">
+            <form>
+               <!-- Editor Header: Contains the section title and controls like script type, format, and save -->
+               <div class="editor-header panel-header">
+                  <h2>__MSG_opt_editor__</h2>
+                  <div class="editor-controls">
+                     <label for="script-type" class="sr-only">Script Type</label>
+                     <select id="script-type">
+                        <option value="userscript">Userscript</option>
+                        <option value="userstyle">Userstyle</option>
+                     </select>
+                     <button type="button" id="toggle-word-wrap-btn" title="Toggle Word Wrap">Wrap</button>
+                     <button type="button" id="format-code-btn">__MSG_opt_btn_format__</button>
+                     <button type="submit" class="btn-primary">__MSG_opt_btn_save_settings__</button>
+                  </div>
+               </div>
+
+               <!-- Code area -->
+               <div class="editor-code-wrapper">
+                  <textarea id="script-code" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+                  <div id="editor-container" class="editor-code-wrapper"></div>
+               </div>
+
+               <!-- URL rules -->
+               <div class="editor-urls-wrapper">
+                  <div class="editor-urls-header">
+                     <label for="script-urls">__MSG_opt_urls_editor_label__</label>
+                     <button type="button" id="copy-script-urls-btn" tooltip="__MSG_opt_btn_copy_urls_tooltip__" flow="left">
+                        __MSG_opt_btn_copy_urls__
+                     </button>
+                  </div>
+                  <textarea id="script-urls" rows="4" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+                  <p class="form-description">__MSG_opt_urls_editor_desc__</p>
+
+                  <!-- URL tester -->
+                  <div id="pattern-tester" class="pattern-tester no-dirty-check" style="display: none;">
+                     <label for="test-url-input" class="sr-only">Test URL:</label>
+                     <div class="input-with-clear">
+                        <input type="url" id="test-url-input" placeholder="Enter URL (https://) to test match patterns...">
+                        <button type="button" id="clear-test-url-btn" class="clear-btn hide" aria-label="Clear">&times;</button>
+                     </div>
+                     <div id="test-url-result" class="test-result"></div>
+                 </div>
+               </div>
+            </form>
+         </main>
+
+         <!-- Storage -->
+         <section class="panel storage">
+            <!-- Storage Header: Collapsible toggle for the storage panel -->
+            <div class="storage-header panel-header" id="storage-toggle">
+               <h2>__MSG_opt_storage__</h2>
+               <span class="storage-caret">▼</span>
+            </div>
+            <!-- Storage Content: Contains the textarea for raw storage data and the edit-enabling checkbox -->
+            <div class="storage-content">
+               <div id="storage-error" class="form-error-message"></div>
+
+               <textarea id="storage-data" readonly></textarea>
+               <div id="storage-container" class="hide"></div>
+
+               <div class="storage-controls">
+                  <div class="checkbox-wrapper" tooltip="__MSG_opt_btn_agee_storage_data_agree_edit_tooltip__" >
+                     <input type="checkbox" id="storage-data-agree-edit" class="default-checkbox">
+                     <label for="storage-data-agree-edit">__MSG_opt_btn_agee_storage_data_agree_edit__</label>
+                  </div>
+
+                  <div class="checkbox-wrapper hide" id="sync-storage-wrapper" tooltip="__MSG_opt_sync_storage_tooltip__" flow="up">
+                     <input type="checkbox" id="sync-storage-checkbox" class="default-checkbox no-dirty-check">
+                     <label for="sync-storage-checkbox">__MSG_opt_sync_storage__</label>
+                  </div>
+
+               </div>
+            </div>
+         </section>
+
+         <!-- Settings -->
+         <section class="panel settings">
+            <!-- Settings Header -->
+            <div class="panel-header">
+               <h2>__MSG_opt_tab_settings__</h2>
+            </div>
+            <!-- Settings Form: Contains all global options for the extension -->
+            <div class="panel-content">
+               <form id="settings-form">
+                  <!-- Update Interval -->
+                  <div class="form-group">
+                     <label for="autoUpdateIntervalDays">__MSG_opt_setting_update_interval__</label>
+                     <select id="autoUpdateIntervalDays" name="autoUpdateIntervalDays">
+                        <option value="0">__MSG_opt_setting_update_off__</option>
+                        <option value="1">__MSG_opt_setting_update_daily__</option>
+                        <option value="2">__MSG_opt_setting_update_2_days__</option>
+                        <option value="3">__MSG_opt_setting_update_3_days__</option>
+                        <option value="7">__MSG_opt_setting_update_weekly__</option>
+                        <option value="14">__MSG_opt_setting_update_2_weekly__</option>
+                        <option value="30">__MSG_opt_setting_update_monthly__</option>
+                     </select>
+                  </div>
+
+                  <!-- Theme -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="theme">__MSG_opt_setting_theme__</label>
+                        <select id="theme" name="theme">
+                           <option value="auto">__MSG_opt_setting_theme_auto__</option>
+                           <option value="light">Light</option>
+                           <option value="light-milk">Light milk</option>
+                           <option value="dark-gray">Dark gray</option>
+                           <option value="darken-gray">Darken gray</option>
+                           <option value="dark-green">Dark green</option>
+                           <option value="dark-blue">Dark blue</option>
+                        </select>
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_theme_desc__</p>
+                  </div>
+
+                  <!-- Badge count -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="showBadgeCount">__MSG_opt_setting_show_badge_count__</label>
+                        <input type="checkbox" id="showBadgeCount" name="showBadgeCount" class="switch-checkbox">
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_show_badge_count_desc__</p>
+                  </div>
+
+                  <!-- Badge color -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="badgeColor">__MSG_opt_setting_badge_color__</label>
+                        <input type="color" id="badgeColor" name="badgeColor">
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_badge_color_desc__</p>
+                  </div>
+
+                  <!-- Log mute -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="muteAllLogs">__MSG_opt_setting_mute_all_logs__</label>
+                        <input type="checkbox" id="muteAllLogs" name="muteAllLogs" class="switch-checkbox">
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_mute_all_logs_desc__</p>
+                  </div>
+
+                  <!-- Editor mode -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="editorMode">__MSG_opt_setting_editor_mode__</label>
+                        <select id="editorMode" name="editorMode">
+                           <option value="codemirror">__MSG_opt_setting_editor_mode_cm__</option>
+                           <option value="textarea">__MSG_opt_setting_editor_mode_ta__</option>
+                        </select>
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_editor_mode_desc__</p>
+                  </div>
+
+                  <!-- Log level -->
+                  <div class="form-group">
+                     <div class="form-control-group">
+                        <label for="logLevel">__MSG_opt_setting_log_level__</label>
+                        <select id="logLevel" name="logLevel">
+                           <option value="0">__MSG_opt_setting_log_level_error__</option>
+                           <option value="1">__MSG_opt_setting_log_level_warn__</option>
+                           <option value="2">__MSG_opt_setting_log_level_info__</option>
+                           <option value="3">__MSG_opt_setting_log_level_debug__</option>
+                        </select>
+                     </div>
+                     <p class="form-description">__MSG_opt_setting_log_level_desc__</p>
+                  </div>
+
+                  <hr>
+
+                  <!-- Form actions -->
+                  <div class="form-actions">
+                     <button type="submit" class="btn-primary" tooltip="__MSG_opt_btn_save_settings_tooltip__" flow="left">__MSG_opt_btn_save_settings__</button>
+                  </div>
+               </form>
+            </div>
+         </section>
+
+      </div> <!-- /.container -->
+   </div> <!-- /.layout-wrapper -->
+
+   <!-- SVG Icon Definitions: A hidden container for all SVG icons used in the UI -->
+   <svg style="display: none;">
+      <symbol id="iconAdd" viewBox="0 0 24 24">
+         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path>
+      </symbol>
+      <symbol id="iconRemove" viewBox="0 0 24 24">
+         <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+      </symbol>
+      <!-- <symbol id="iconHomepage" viewBox="0 -12 118 118">
+         <path d="M 89.132 45.062 l -42.05 -42.05 c -1.15 -1.15 -3.014 -1.15 -4.164 0 l -42.05 42.05 c -1.855 1.855 -0.541 5.026 2.082 5.026 h 6.335 c 1.626 0 2.944 1.318 2.944 2.944 v 31.874 c 0 1.626 1.318 2.944 2.944 2.944 h 15.994 c 1.798 0 3.255 -1.457 3.255 -3.255 V 63.811 c 0 -1.97 1.597 -3.566 3.566 -3.566 h 14.024 c 1.97 0 3.566 1.597 3.566 3.566 v 20.784 c 0 1.798 1.457 3.255 3.255 3.255 h 15.994 c 1.626 0 2.944 -1.318 2.944 -2.944 V 53.032 c 0 -1.626 1.318 -2.944 2.944 -2.944 h 6.335 C 89.673 50.088 90.986 46.917 89.132 45.062 z"></path>
+         <path d="M 41.236 79.709 h -1.681 c -1.101 0 -1.994 -0.893 -1.994 -1.994 v 0 c 0 -1.101 0.893 -1.994 1.994 -1.994 h 1.681 c 1.101 0 1.994 0.893 1.994 1.994 v 0 C 43.23 78.816 42.337 79.709 41.236 79.709 z"></path>
+      </symbol> -->
+      <symbol id="iconInfo" viewBox="0 0 1024 1024">
+         <path d="M902.4 285.6c-40-68.8-95.2-124-164-164s-144.8-60-226.4-60-156.8 20-226.4 60.8-123.2 94.4-164 163.2-60 144.8-60 226.4 20 156.8 60.8 226.4 95.2 124 164 164 144.8 60.8 226.4 60.8 156.8-20 226.4-60.8 124-95.2 164-164S964 593.6 964 512c-1.6-81.6-21.6-156.8-61.6-226.4zm-331.2 480c0 31.2-23.2 56.8-51.2 56.8h-16.8c-28 0-51.2-25.6-51.2-56.8V482.4c0-31.2 23.2-56.8 51.2-56.8H520c28 0 51.2 25.6 51.2 56.8v283.2zm-60-424.8c-38.4 0-69.6-31.2-69.6-69.6s31.2-69.6 69.6-69.6c38.4 0 69.6 31.2 69.6 69.6s-31.2 69.6-69.6 69.6z"></path>
+      </symbol>
+      <!-- <symbol id="iconHelp" viewBox="0 0 1024 1024">
+         <path d="M513.672 49.158c-256.358 0-464.178 207.819-464.178 464.176 0 256.358 207.82 464.177 464.177 464.177S977.85 769.693 977.85 513.334c0-256.357-207.82-464.176-464.177-464.176zm0 788.3c-30.94 0-56.02-25.08-56.02-56.02 0-30.94 25.081-56.021 56.02-56.021 30.94 0 56.021 25.08 56.021 56.02 0 30.94-25.081 56.021-56.02 56.021zm98.037-335.092c-55.397 37.21-54.02 117.088-54.02 117.088 0 24.31-19.657 44.087-43.967 44.087s-43.966-19.567-43.966-43.877c0-117.054 84.107-178.356 104.308-190.36 23.974-12.005 47.042-36.59 47.042-65.857 0-39.268-31.404-71.494-107.434-72.206-76.029.712-107.94 30.02-107.94 70.036 0 0-.026 1.332-.026 2.011 0 24.31-20.669 44.017-44.978 44.017s-45.004-19.707-45.004-44.017v-2.01c0-88.035 72.913-157.359 196.962-158.07 124.047.711 195.912 72.027 195.912 159.977-.001 66.673-33.364 99.666-96.89 139.18z"></path>
+      </symbol> -->
+      <symbol id="iconSearch" viewBox="0 0 24 24" fill="currentColor">
+         <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5A6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5S14 7.01 14 9.5S11.99 14 9.5 14z"/>
+      </symbol>
+      <symbol id="iconCloudUpload" viewBox="0 0 24 24">
+         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H8l4-4 4 4h-2z"/>
+      </symbol>
+      <symbol id="iconCloudDownload" viewBox="0 0 24 24">
+         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+      </symbol>
+      <symbol id="iconCloudSynced" viewBox="0 0 24 24">
+         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.59-5.59L17 10l-7 7z"/>
+      </symbol>
+      <symbol id="iconLink" viewBox="0 0 24 24">
+         <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+      </symbol>
+   </svg>
+
+   <!-- Drop Zone for Drag-and-Drop file imports -->
+   <div id="drop-zone" class="drop-zone hide" aria-hidden="true">
+      <div class="drop-zone__content">
+         <svg width="48" height="48" aria-hidden="true"><use xlink:href="#iconCloudUpload"></use></svg>
+         <p>__MSG_opt_drop_zone_text__</p>
+      </div>
+   </div>
+
+   <div id="toast-notification" class="toast"></div>
+   <script src="/js/libs/sortable.min.js"></script>
+
+   <script type="module" src="/js/pages/options.js"></script>
+</body>
+
+</html>

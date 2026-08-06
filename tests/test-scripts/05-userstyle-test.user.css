@@ -1,0 +1,13 @@
+/* ==UserStyle==
+@name        LiteMonkey Test - UserStyle
+@namespace   https://litemonkey.test/
+@version     1.0.0
+@description Tests UserStyle injection and @-moz-document rules.
+@author      LiteMonkey Team
+==/UserStyle== */
+
+@-moz-document domain("example.com"), domain("httpbin.org") {
+  body {
+     border-top: 5px solid #27a6e5 !important;
+  }
+}

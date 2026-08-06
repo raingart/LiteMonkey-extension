@@ -1,0 +1,569 @@
+{
+   "app_name": {
+      "message": "Lite Monkey"
+   },
+   "app_description": {
+      "message": "A lightweight userscript manager for Manifest V3"
+   },
+
+   "installer_page_title": {
+      "message": "Script Installation"
+   },
+   "installer_title": {
+      "message": "Userscript Installation"
+   },
+   "installer_meta_name": {
+      "message": "Name"
+   },
+   "installer_meta_version": {
+      "message": "Version"
+   },
+   "installer_meta_author": {
+      "message": "Author"
+   },
+   "installer_meta_description": {
+      "message": "Description"
+   },
+   "installer_meta_source": {
+      "message": "Source"
+   },
+   "installer_btn_install": {
+      "message": "Install"
+   },
+   "installer_btn_update": {
+      "message": "Update"
+   },
+   "installer_btn_downgrade": {
+      "message": "Downgrade"
+   },
+   "installer_btn_reinstall": {
+      "message": "Re-install"
+   },
+   "installer_btn_installing": {
+      "message": "Installing..."
+   },
+   "installer_btn_cancel": {
+      "message": "Cancel"
+   },
+   "installer_btn_close": {
+      "message": "Close"
+   },
+   "installer_btn_view_source": {
+      "message": "View Source Code"
+   },
+   "installer_btn_hide_source": {
+      "message": "Hide Source Code"
+   },
+   "installer_error_script_too_large": {
+      "message": "Script size exceeds the maximum allowed limit of 5MB"
+   },
+   "installer_warning_api_permissions": {
+      "message": "This script requests additional browser permissions: $APIS$",
+      "placeholders": {
+         "apis": {
+            "content": "$1"
+         }
+      }
+   },
+   "installer_error_no_url": {
+      "message": "Error: Script URL not provided"
+   },
+   "installer_error_no_meta": {
+      "message": "Error: This does not appear to be a valid userscript (missing @name)"
+   },
+   "installer_error_fetch_failed": {
+      "message": "Error: Failed to download the script"
+   },
+   "installer_error_http_status": {
+      "message": "Error: Failed to download the script. Server returned status $STATUS$.",
+      "placeholders": {
+         "status": {
+            "content": "$1"
+         }
+      }
+   },
+   "installer_error_save_failed": {
+      "message": "Error: Failed to save the script. Details: $ERROR$.",
+      "placeholders": {
+         "error": {
+            "content": "$1"
+         }
+      }
+   },
+   "installer_error_unknown": {
+      "message": "An unknown error occurred during installation."
+   },
+   "installer_warning_untrusted": {
+      "message": "Warning: This script is from an unverified source. Please review the code before installing."
+   },
+   "installer_warning_permissions": {
+      "message": "This script requests access to your data on: $DOMAINS$. You will be prompted to grant these permissions.",
+      "placeholders": {
+         "domains": {
+            "content": "$1"
+         }
+      }
+   },
+   "installer_meta_runs_on": {
+      "message": "Runs on"
+   },
+   "installer_meta_connects_to": {
+      "message": "Connects to"
+   },
+   "installer_all_sites": {
+      "message": "All websites (Warning: This script can run on and read data from any website you visit)"
+   },
+   "installer_alert_permission_denied": {
+      "message": "Permissions were denied. The script was saved in a disabled state."
+   },
+
+   "search_placeholder": {
+      "message": "Search scripts..."
+   },
+   "sort_manual": {
+      "message": "Sort: Manual"
+   },
+   "sort_name_asc": {
+      "message": "Name (A-Z)"
+   },
+   "sort_name_desc": {
+      "message": "Name (Z-A)"
+   },
+   "sort_enabled_first": {
+      "message": "Enabled first"
+   },
+   "sort_last_updated": {
+      "message": "Last updated"
+   },
+   "sort_by_tooltip": {
+      "message": "Sort by"
+   },
+
+   "popup_title": {
+      "message": "Active Scripts"
+   },
+   "popup_logs_title": {
+      "message": "Script Logs"
+   },
+   "popup_close_modal_tooltip": {
+      "message": "Close Log Viewer"
+   },
+   "popup_no_scripts": {
+      "message": "No scripts running on this page"
+   },
+   "popup_error_cant_connect": {
+      "message": "Could not connect to the background service"
+   },
+   "popup_needs_permissions_tooltip": {
+      "message": "This script requires additional permissions. Please enable it from the Options page"
+   },
+   "popup_unstable_script_warning": {
+      "message": "Warning: Unstable performance (high error rate) on this page."
+   },
+   "popup_script_flooding_errors_tooltip": {
+      "message": "Warning: This script is spamming errors and might cause page lag."
+   },
+   "popup_alert_permissions_needed": {
+      "message": "Additional permissions are required to enable this script. Please grant them on the settings page."
+   },
+   "popup_alert_update_failed": {
+      "message": "Failed to update the script status."
+   },
+   "popup_btn_pause_all": {
+      "message": "Enable or pause all scripts"
+   },
+   "popup_btn_open_options": {
+      "message": "Open Options"
+   },
+   "popup_edit_script_tooltip": {
+      "message": "Edit script"
+   },
+   "popup_show_logs_tooltip": {
+      "message": "Show Logs"
+   },
+   "popup_logs_disabled_tooltip": {
+      "message": "Log viewing is available when 'Redirect logs to Popup' is enabled for this script in Options"
+   },
+   "popup_reload_btn": {
+      "message": "Reload"
+   },
+   "popup_reload_prompt": {
+      "message": "Reload page to apply changes"
+   },
+   "popup_find_scripts_btn": {
+      "message": "Find scripts for this site"
+   },
+   "popup_logs_cleared": {
+      "message": "Logs cleared"
+   },
+   "popup_no_logs": {
+      "message": "No logs recorded for this script yet"
+   },
+   "popup_btn_copy_logs": {
+      "message": "Copy Logs"
+   },
+   "popup_btn_clear_logs": {
+      "message": "Clear Logs"
+   },
+   "popup_btn_mute_logs": {
+      "message": "Mute in Console"
+   },
+   "popup_btn_unmute_logs": {
+      "message": "Unmute in Console"
+   },
+   "popup_exclude_site_tooltip": {
+      "message": "Exclude on $DOMAIN$",
+      "placeholders": {
+         "domain": {
+            "content": "$1"
+         }
+      }
+   },
+   "popup_unexclude_site_tooltip": {
+      "message": "Excluded on $DOMAIN$ (click to unblock)",
+      "placeholders": {
+         "domain": {
+            "content": "$1"
+         }
+      }
+   },
+
+   "opt_sidebar": {
+      "message": "Scripts"
+   },
+   "opt_editor": {
+      "message": "Editor"
+   },
+   "opt_storage": {
+      "message": "Storage"
+   },
+   "opt_btn_new_script": {
+      "message": "New Script"
+   },
+   "opt_no_scripts_message": {
+      "message": "No scripts installed. Click 'New Script' or 'Import' to get started"
+   },
+   "opt_btn_check_updates": {
+      "message": "Updates"
+   },
+   "opt_btn_check_updates_tooltip": {
+      "message": "Check all for Updates"
+   },
+   "opt_btn_checking_updates": {
+      "message": "Checking..."
+   },
+   "opt_btn_open_settings": {
+      "message": "Settings"
+   },
+   "opt_btn_import_settings": {
+      "message": "Import"
+   },
+   "opt_btn_export_settings": {
+      "message": "Export"
+   },
+   "opt_urls_editor_label": {
+      "message": "Custom URL Rules:"
+   },
+   "opt_urls_editor_desc": {
+      "message": "One URL pattern per line. Use a '-' prefix to exclude"
+   },
+   "opt_url_rules_placeholder_headless": {
+      "message": "URL rules are required. One per line.\nExample: *://*.example.com/*"
+   },
+   "opt_url_rules_placeholder_override": {
+      "message": "Override @match/@include rules here.\nPrefix with `-` to exclude."
+   },
+   "opt_btn_copy_urls": {
+      "message": "Copy from script"
+   },
+   "opt_btn_copy_urls_tooltip": {
+      "message": "Fill field with original @match/@include rules from the script source code"
+   },
+   "opt_btn_format": {
+      "message": "Format"
+   },
+   "opt_btn_formatting": {
+      "message": "Formatting..."
+   },
+   "opt_btn_save_settings": {
+      "message": "Save"
+   },
+   "opt_btn_save_settings_process": {
+      "message": "Saving..."
+   },
+   "opt_btn_save_settings_tooltip": {
+      "message": "Save and apply changes"
+   },
+   "opt_confirm_discard_unsaved": {
+      "message": "You have unsaved changes. Are you sure you want to discard them?"
+   },
+   "opt_btn_agee_storage_data_agree_edit": {
+      "message": "Allow editing of raw storage data"
+   },
+   "opt_btn_agee_storage_data_agree_edit_tooltip": {
+      "message_old": "I understand that editing this data may break the script",
+      "message": "I agree, editing may break the script"
+   },
+   "opt_script_remove_confirm": {
+      "message": "Are you sure you want to permanently delete this script?"
+   },
+   "opt_tooltip_permissions_needed": {
+      "message": "This script is disabled because it requires additional permissions. Click the toggle to grant them"
+   },
+   "opt_tooltip_mute_in_console": {
+      "message": "Redirect logs from DevTools to Popup Log Viewer"
+   },
+   "opt_tooltip_unmute_in_console": {
+      "message": "Show logs in DevTools (disables Popup Log Viewer for this script)"
+   },
+   "opt_tooltip_mute_disabled_globally": {
+      "message": "This setting is overridden by the global 'Redirect all script logs to Popup' option"
+   },
+   "opt_drop_zone_text": {
+      "message": "Drop script files (.user.js, .json) here to import"
+   },
+
+   "opt_tab_settings": {
+      "message": "Settings"
+   },
+   "opt_setting_update_interval": {
+      "message": "Check for script updates"
+   },
+   "opt_setting_update_off": {
+      "message": "Off"
+   },
+   "opt_setting_update_daily": {
+      "message": "Daily"
+   },
+   "opt_setting_update_2_days": {
+      "message": "Every 2 days"
+   },
+   "opt_setting_update_3_days": {
+      "message": "Every 3 days"
+   },
+   "opt_setting_update_weekly": {
+      "message": "Weekly"
+   },
+   "opt_setting_update_2_weekly": {
+      "message": "Every 2 weeks"
+   },
+   "opt_setting_update_monthly": {
+      "message": "Monthly"
+   },
+   "opt_setting_log_level": {
+      "message": "Extension Log Level"
+   },
+   "opt_setting_log_level_desc": {
+      "message": "Controls the verbosity of the extension's own logs in the DevTools console. For debugging purposes"
+   },
+   "opt_setting_log_level_debug": {
+      "message": "Debug"
+   },
+   "opt_setting_log_level_info": {
+      "message": "Info"
+   },
+   "opt_setting_log_level_warn": {
+      "message": "Warnings"
+   },
+   "opt_setting_log_level_error": {
+      "message": "Errors Only"
+   },
+   "opt_setting_show_badge_count": {
+      "message": "Show active script count on icon"
+   },
+   "opt_setting_show_badge_count_desc": {
+      "message": "Display the number of running scripts for the current tab on the extension icon"
+   },
+   "opt_setting_badge_color": {
+      "message": "Badge color"
+   },
+   "opt_setting_badge_color_desc": {
+      "message": "Choose the background color for the active script count badge"
+   },
+   "opt_setting_theme": {
+      "message": "Theme"
+   },
+   "opt_setting_theme_auto": {
+      "message": "Auto (System Preference)"
+   },
+   "opt_setting_theme_desc": {
+      "message": "Choose the interface color scheme"
+   },
+   "opt_setting_editor_mode": {
+      "message": "Editor Mode"
+   },
+   "opt_setting_editor_mode_cm": {
+      "message": "Advanced (CodeMirror)"
+   },
+   "opt_setting_editor_mode_ta": {
+      "message": "Simple (Textarea)"
+   },
+   "opt_setting_editor_mode_desc": {
+      "message": "Choose the code editor. 'Simple' may improve performance on old devices or increase screen reader compatibility. Requires a page reload to apply"
+   },
+   "opt_setting_mute_all_logs": {
+      "message": "Redirect all script logs to Popup"
+   },
+   "opt_setting_mute_all_logs_desc": {
+      "message": "Prevents script output from appearing in the browser's console and sends it to the extension's log viewer instead. This may affect stack trace accuracy"
+   },
+   "opt_alert_import_failed": {
+      "message": "Import failed: "
+   },
+   "opt_alert_script_code_empty": {
+      "message": "Script code cannot be empty"
+   },
+   "opt_alert_editor_conflict_update": {
+      "message": "⚠️ Conflict: The script currently open in the editor was just updated in the background, but you have unsaved changes.\n\nIf you save now, you will overwrite the new update with your old code. Please copy your changes to a safe place and reload the script"
+   },
+
+   "toast_settings_saved": {
+      "message": "Settings saved!"
+   },
+   "toast_order_saved": {
+      "message": "Script order saved"
+   },
+   "toast_script_saved": {
+      "message_old": "Script saved and activated!",
+      "message": "Script saved!"
+   },
+   "toast_permissions_granted": {
+      "message": "Permissions granted. Resaving..."
+   },
+   "toast_broad_permission_warning": {
+      "message": "WARNING: This script requests permission to run on ALL websites (*://*/*), which can be a security risk.\n\nAre you sure you want to proceed with saving?"
+   },
+   "toast_permission_denied": {
+      "message": "Permission denied. Script saved but disabled"
+   },
+   "toast_enable_failed_permission": {
+      "message": "Permission denied. The script remains disabled"
+   },
+   "toast_save_cancelled": {
+      "message": "Save operation cancelled"
+   },
+   "toast_script_removed": {
+      "message": "Script removed"
+   },
+   "toast_pending_install": {
+      "message": "Script is ready. Click 'Save' to grant permissions and complete installation"
+   },
+   "toast_updates_found": {
+      "message": "Successfully updated $COUNT$ script(s)!",
+      "placeholders": {
+         "count": {
+            "content": "$1"
+         }
+      }
+   },
+   "toast_no_updates": {
+      "message": "No new updates found"
+   },
+   "toast_update_in_progress": {
+      "message": "An update check is already in progress"
+   },
+   "toast_updates_failed": {
+      "message": "An error occurred during the update check"
+   },
+   "toast_fix_errors_before_saving": {
+      "message": "Please fix the errors before saving"
+   },
+   "toast_require_retry_started": {
+      "message": "Retrying dependency load..."
+   },
+   "toast_require_retry_failed": {
+      "message": "Dependency load retry failed"
+   },
+   "toast_import_completed": {
+      "message": "Import finished"
+   },
+   "toast_imported_new": {
+      "message": "Added $1 new script(s)"
+   },
+   "toast_imported_updated": {
+      "message": "Updated $1 script(s)"
+   },
+   "toast_imported_skipped": {
+      "message": "Skipped $1 script(s) (older or same version)"
+   },
+   "popup_toast_logs_muted": {
+      "message": "Logs for this script will now be shown in the Popup Log Viewer"
+   },
+   "popup_toast_logs_unmuted": {
+      "message": "Logs for this script will now be shown in the browser's DevTools console"
+   },
+
+   "toast_gdrive_permission_denied": {
+      "message": "Identity permission is required for Google Drive sync."
+   },
+   "toast_gdrive_sync_started": {
+      "message": "Connecting to Google Drive..."
+   },
+   "toast_gdrive_sync_success": {
+      "message": "Google Drive status loaded!"
+   },
+   "toast_gdrive_sync_failed": {
+      "message": "Failed to sync with Google Drive."
+   },
+   "toast_gdrive_uploading": {
+      "message": "Uploading script..."
+   },
+   "toast_gdrive_upload_success": {
+      "message": "Uploaded to Google Drive successfully!"
+   },
+   "toast_gdrive_downloading": {
+      "message": "Downloading script..."
+   },
+   "toast_gdrive_download_success": {
+      "message": "Downloaded and updated successfully!"
+   },
+   "toast_gdrive_deleting": {
+      "message": "Deleting from Google Drive..."
+   },
+   "toast_gdrive_delete_success": {
+      "message": "Deleted from Google Drive!"
+   },
+   "toast_gdrive_action_failed": {
+      "message": "Google Drive operation failed."
+   },
+   "opt_gdrive_delete_confirm": {
+      "message": "Are you sure you want to delete this script from Google Drive permanently?"
+   },
+   "opt_btn_gdrive_sync": {
+      "message": "Sync"
+   },
+   "opt_btn_gdrive_sync_process": {
+      "message": "Syncing..."
+   },
+   "opt_btn_gdrive_sync_tooltip": {
+      "message": "Synchronize scripts with GDrive"
+   },
+   "gdrive_status_synced": {
+      "message": "Synced. Cloud and local versions are identical."
+   },
+   "gdrive_status_local_newer": {
+      "message": "Out of sync: Your local copy is newer. Click to upload (🔼)."
+   },
+   "gdrive_status_cloud_newer": {
+      "message": "Out of sync: Cloud copy is newer. Click to download (🔽)."
+   },
+   "gdrive_status_not_synced": {
+      "message": "Not backed up: This script exists only on this computer. Click to upload (🔼)."
+   },
+   "gdrive_status_cloud_only": {
+      "message": "Cloud backup: This script exists only on Google Drive. Click to download (🔽) and restore."
+   },
+   "opt_sync_storage": {
+      "message": "Sync settings to cloud"
+   },
+   "opt_sync_storage_tooltip": {
+      "message": "Upload and download this script's local configurations to Google Drive during synchronization"
+   },
+
+   "tooltip_new_script": {
+      "message": "Create a new script"
+   },
+   "tooltip_remove_script": {
+      "message": "Remove script"
+   }
+}

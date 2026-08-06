@@ -1,0 +1,79 @@
+{
+   "manifest_version": 3,
+   "name": "__MSG_app_name__",
+   "version": "1.0.0",
+   "minimum_chrome_version": "102",
+   "default_locale": "en",
+   "description": "__MSG_app_description__",
+   "icons": {
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+   },
+   "permissions": [
+      "activeTab",
+      "scripting",
+      "userScripts",
+      "declarativeNetRequest",
+      "offscreen",
+      "storage",
+      "alarms",
+      "cookies"
+   ],
+   "optional_permissions": [
+      "notifications",
+      "downloads",
+      "clipboardWrite",
+      "tabs",
+      "identity"
+   ],
+   "oauth2": {
+     "client_id": "944057621702-pbvkee2q60t3bvl8rplrds5705d0vrsd.apps.googleusercontent.com",
+     "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata"
+    ]
+   },
+   "host_permissions": [
+      "*://update.greasyfork.org/*",
+      "*://update.sleazyfork.org/*",
+      "*://openuserjs.org/*",
+      "*://github.com/*",
+      "*://www.userscript.zone/*"
+   ],
+   "optional_host_permissions": [
+      "<all_urls>"
+   ],
+   "background": {
+      "service_worker": "js/background/main.js",
+      "type": "module"
+   },
+   "content_scripts": [
+      {
+         "js": [
+            "js/bootstrap.js"
+         ],
+         "matches": [
+            "<all_urls>"
+         ],
+         "run_at": "document_start",
+         "all_frames": true,
+         "world": "ISOLATED"
+      }
+   ],
+   "action": {
+      "default_popup": "html/popup.html"
+   },
+   "options_ui": {
+      "page": "html/options.html",
+      "open_in_tab": true
+   },
+   "web_accessible_resources": [
+      {
+         "resources": [
+            "html/installer.html"
+         ],
+         "matches": [
+            "<all_urls>"
+         ]
+      }
+   ]
+}

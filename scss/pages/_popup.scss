@@ -1,0 +1,412 @@
+// scss/pages/_popup.scss
+//
+// Styles for the browser action popup window.
+
+@use 'sass:map';
+@use '../base/variables' as *;
+
+.page-popup {
+   // These styles apply only when the popup HTML is loaded
+   min-width: 340px;
+   max-width: 420px;
+
+   .popup-container {
+      background-color: var(--color-surface);
+   }
+
+   // --- Header ---
+   .popup-header {
+      padding: space(3);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      gap: space(2);
+
+      .header-main {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         gap: space(2);
+
+         h1 {
+            margin: 0;
+            font-size: 1.2em;
+            white-space: nowrap;
+         }
+      }
+
+      .header-actions {
+         display: flex;
+         align-items: center;
+         gap: space(2);
+
+         .pause-wrapper {
+            display: flex;
+            align-items: center;
+            margin-right: space(1);
+         }
+
+         button {
+            width: space(8);
+            height: space(8);
+            padding: space(1.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            svg {
+               width: 18px;
+               height: 18px;
+               fill: var(--color-text-secondary);
+               transition: fill var(--transition-fast);
+            }
+
+            &:hover:not([disabled]) svg {
+               fill: var(--color-primary);
+            }
+         }
+      }
+
+      .info-banner {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         padding: space(2) space(3);
+         background-color: var(--color-primary-light);
+         border: 1px solid var(--color-primary-dark);
+         border-radius: map.get($radius, sm);
+         font-size: 0.9em;
+      }
+   }
+
+   // --- Script List ---
+   .popup-container>main {
+      // Target the main element inside the popup
+      padding: 0 space(2) space(2);
+
+      #script-list {
+         max-height: 400px;
+         overflow-y: auto;
+
+         &.is-paused .script-item {
+            opacity: 0.5;
+            pointer-events: none;
+         }
+      }
+   }
+
+   .script-item {
+      border-bottom: 1px solid var(--color-border-light);
+      transition: background-color var(--transition-fast);
+
+      &:last-child {
+         border-bottom: none;
+      }
+
+      // Styling for unstable script rows (soft red tint)
+      &.is-unstable-script {
+         background-color: rgba(230, 57, 70, 0.05);
+         border-left: 3px solid var(--color-error);
+      }
+
+      // Styling for site-excluded script rows (subtle opacity & left border)
+      &.is-excluded-on-site {
+         opacity: 0.75;
+
+         label {
+            text-decoration: line-through;
+            opacity: 0.8;
+         }
+      }
+
+      .script-header {
+         display: flex;
+         align-items: center;
+         gap: space(2);
+         min-width: 0; // Prevents flex children from overflowing
+      }
+
+      .script-main {
+         display: flex;
+         align-items: center;
+         gap: space(2);
+         flex-grow: 1;
+         min-width: 0;
+      }
+
+      // Warning badge indicator for high script failure rates
+      .script-warning-badge {
+         font-size: 1.3em;
+         line-height: 1;
+         cursor: help;
+         display: inline-flex;
+         align-items: center;
+         justify-content: center;
+         width: 24px;
+         height: 24px;
+         background-color: rgba(255, 193, 7, 0.2);
+         border-radius: radius(sm);
+         user-select: none;
+      }
+
+      .script-icon {
+         width: 24px;
+         height: 24px;
+         flex-shrink: 0;
+         border-radius: map.get($radius, sm);
+         object-fit: contain;
+      }
+
+      label {
+         flex-grow: 1;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+      }
+
+      .script-homepage-link {
+         display: inline-flex;
+         align-items: center;
+         justify-content: center;
+         padding: 2px;
+         color: var(--color-text-secondary);
+         opacity: 0.6;
+         transition: opacity var(--transition-fast), color var(--transition-fast);
+         flex-shrink: 0;
+
+         &:hover {
+            opacity: 1;
+            color: var(--color-primary);
+         }
+
+         svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+         }
+      }
+
+      .script-actions {
+         display: flex;
+         align-items: center;
+         margin-left: auto;
+         gap: space(1);
+
+         button {
+            background: none;
+            border: none;
+            padding: 4px;
+            border-radius: map.get($radius, sm);
+            opacity: 0.7;
+            display: flex;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            transition: opacity var(--transition-fast), background-color var(--transition-fast);
+
+            &:not([disabled]):hover {
+               opacity: 1;
+               background-color: var(--color-background-alt, rgba(0, 0, 0, 0.05));
+            }
+
+            // Highlight console icon when active logs exist
+            &.script-logs-btn.has-logs {
+               opacity: 1;
+
+               svg {
+                  fill: var(--color-primary);
+               }
+            }
+
+            // Badge for log count
+            .log-count-badge {
+               position: absolute;
+               top: -2px;
+               right: -2px;
+               font-size: 0.65rem;
+               font-weight: bold;
+               background: var(--color-primary);
+               color: white;
+               padding: 1px 4px;
+               border-radius: 6px;
+               line-height: 1;
+            }
+
+            svg {
+               width: 18px;
+               height: 18px;
+               fill: var(--color-text-secondary);
+            }
+
+            &.script-exclude-btn {
+               &.is-excluded {
+                  opacity: 1;
+                  color: var(--color-error);
+                  background-color: rgba(230, 57, 70, 0.1);
+
+                  svg {
+                     fill: var(--color-error);
+                  }
+               }
+
+               &:hover {
+                  color: var(--color-error);
+
+                  svg {
+                     fill: var(--color-error);
+                  }
+               }
+            }
+
+            &.script-remove-btn:hover {
+               background-color: var(--color-error-light, rgba(230, 57, 70, 0.1));
+
+               svg {
+                  fill: var(--color-error);
+               }
+            }
+         }
+      }
+   }
+
+   .commands-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: space(1.5);
+      margin: space(1.5) 0 space(1) 52px;
+      padding: 0;
+      list-style: none;
+
+      .command-item {
+         display: inline-flex;
+         align-items: center;
+         padding: 2px 10px;
+         background-color: var(--color-primary-light, rgba(39, 166, 229, 0.1));
+         border: 1px solid var(--color-primary-dark, rgba(39, 166, 229, 0.25));
+         color: var(--color-primary);
+         border-radius: 12px;
+         font-size: 0.82em;
+         font-weight: 500;
+         cursor: pointer;
+         transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+
+         &:hover {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #ffffff;
+            transform: translateY(-1px);
+         }
+
+         &:active {
+            transform: translateY(0);
+         }
+      }
+   }
+
+   // --- Footer ---
+   .popup-footer {
+      padding: space(2) space(3);
+      border-top: 1px solid var(--color-border-light);
+      background-color: var(--color-background-alt);
+
+      // Container layout styling
+      .find-scripts-container {
+         display: flex;
+         align-items: center;
+         font-size: 0.9em;
+         color: var(--color-text-secondary);
+      }
+
+      // Style primary search link hover independently
+      .find-scripts-link {
+         display: inline-flex;
+         align-items: center;
+         gap: space(1.5);
+         text-decoration: none;
+         color: var(--color-text-secondary);
+         transition: color var(--transition-fast);
+
+         &:hover {
+            color: var(--color-primary);
+         }
+
+         svg {
+            fill: currentColor;
+         }
+      }
+
+      // Keep slashes / in secondary links neutral
+      .site-links {
+         color: var(--color-text-secondary);
+
+         a {
+            text-decoration: none;
+            color: var(--color-text-secondary);
+            transition: color var(--transition-fast);
+
+            &:hover {
+               color: var(--color-primary);
+               text-decoration: underline;
+            }
+         }
+      }
+   }
+
+   // --- Log Viewer Specifics ---
+   // These styles are for the content inside the log modal
+   .logs-container {
+      color: var(--color-code-text);
+      font-family: monospace;
+      font-size: 0.9em;
+   }
+
+   .log-entry {
+      padding: space(1) space(2);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1); // A generic dark-mode friendly border
+
+      &:last-child {
+         border-bottom: none;
+      }
+
+      .log-meta {
+         display: flex;
+         align-items: center;
+         gap: space(3);
+         font-weight: bold;
+         opacity: 0.7;
+         margin-bottom: space(1);
+      }
+
+      .log-message {
+         word-break: break-word;
+         white-space: pre-wrap;
+      }
+
+      .log-stack {
+         margin-top: space(2);
+         padding-left: space(3);
+         font-size: 0.9em;
+         opacity: 0.8;
+         white-space: pre-wrap;
+         word-break: break-all;
+         border-left: 2px solid rgba(255, 255, 255, 0.2);
+      }
+
+      // Log level colors
+      &.error {
+         color: var(--color-log-error);
+      }
+
+      &.warn {
+         color: var(--color-log-warn);
+      }
+
+      &.info {
+         color: var(--color-log-info);
+      }
+
+      &.debug {
+         color: var(--color-log-debug);
+      }
+   }
+}
