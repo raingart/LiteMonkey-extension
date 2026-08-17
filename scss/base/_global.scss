@@ -120,6 +120,7 @@ button {
 
 // Primary button styles remain separate as they are modifiers
 .btn-primary,
+.btn-warning,
 [type="submit"],
 [type="reset"] {
    background-color: var(--color-primary);
@@ -130,6 +131,11 @@ button {
       background-color: var(--color-primary-dark);
       border-color: var(--color-primary-dark);
       color: white; // Ensures legible white text on dark hover backgrounds
+   }
+
+   &:hover:not([disabled]) {
+      filter: brightness(0.92);
+      color: #fff;
    }
 }
 

@@ -1,9 +1,12 @@
 import browser from '../libs/browser-support.js';
-import { manifest, DEFAULT_ICON_URL } from '../constants.js';
+import { manifest, DEFAULT_ICON_URL, ALLOWED_SCRIPT_MEDIA_TYPES, contentTypeMatchesAllowed } from '../constants.js';
 import { MSG } from '../message-types.js';
 import { agents } from '../database.js';
 import { MatchPattern } from '../libs/match-pattern.js';
 import { MetadataParser } from '../libs/meta-parser.js';
+import { extractMatchPatternsFromStyle, isRegexLiteralRule } from '../libs/userstyle-rules.js';
+import { parseRuleToRegex, wildcardToRegex } from '../libs/match-rule.js';
+import { normalizeCustomUrlsExcludes } from '../libs/origin-guard.js';
 import { generateGmApiCode } from '../gm-api-provider.js';
 import { logger } from '../libs/logger.js';
 import { generateLogWrapperCode } from './log-wrapper.js';
@@ -11,7 +14,6 @@ import { generateLogWrapperCode } from './log-wrapper.js';
 const CONTEXT = 'Utils';
 const REQUIRE_CACHE_NAME = 'require-cache';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-const _regexCache = new Map();
 
 
 // Module-scoped Map for deduplicating in-flight @require network requests
@@ -65,7 +67,34 @@ const getScriptRunAt = (runAtValue) => {
    }
 };
 
-const ALLOWED_SCRIPT_CONTENT_TYPES = ['text/', 'application/javascript', 'application/x-javascript'];
+
+/**
+ * Splits @match/@include rules into MV3 host patterns vs rules that require <all_urls>
+ * (regex @include, or anything MatchPattern cannot represent).
+ *
+ * @param {string[]} matches
+ * @returns {{ hostPatterns: string[], needsAllUrls: boolean }}
+ */
+function classifyMatchRulesForPermissions(matches) {
+   const hostPatterns = [];
+   let needsAllUrls = false;
+
+   for (const raw of matches) {
+      if (typeof raw !== 'string' || !raw.trim()) continue;
+      if (isRegexLiteralRule(raw)) {
+         needsAllUrls = true;
+         continue;
+      }
+      const parsed = new MatchPattern(raw);
+      if (parsed.isValid && parsed.pattern) {
+         hostPatterns.push(parsed.pattern);
+      } else {
+         needsAllUrls = true;
+      }
+   }
+
+   return { hostPatterns, needsAllUrls };
+}
 
 /**
  * Resolves the effective match and exclude rules for a script,
@@ -83,12 +112,18 @@ function getEffectiveRules(script) {
    }
 
    const meta = script.meta || {};
-   const metaMatches = [...ensureArray(meta.match), ...ensureArray(meta.include)];
+   let metaMatches = [...ensureArray(meta.match), ...ensureArray(meta.include)];
    const metaExcludes = ensureArray(meta.exclude);
+
+   // Stylus-style UserCSS often has no @match — derive hosts from @-moz-document
+   if (metaMatches.length === 0 && script.userCode) {
+      const inferred = extractMatchPatternsFromStyle(script.userCode);
+      if (inferred.length) metaMatches = inferred;
+   }
 
    let result;
    if (script.customUrls && typeof script.customUrls === 'string' && script.customUrls.trim()) {
-      const lines = script.customUrls.split('\n').map((s) => s.trim()).filter(Boolean);
+      const lines = normalizeCustomUrlsExcludes(script.customUrls).split('\n').map((s) => s.trim()).filter(Boolean);
       const customMatches = lines.filter((l) => !l.startsWith('-'));
       const customExcludes = lines.filter((l) => l.startsWith('-')).map((l) => l.substring(1));
 
@@ -116,27 +151,20 @@ async function handlePermissionCheck(script) {
 
    // 1. Get active effective match rules (customUrls takes priority)
    const { matches } = getEffectiveRules(script);
-   const hostPatterns = matches
-      .map((p) => new MatchPattern(p).pattern)
-      .filter(Boolean);
-
-   const invalidPattern = hostPatterns.find((p) => !new MatchPattern(p).isValid);
-   if (invalidPattern) {
-      return {
-         unrequestable: true,
-         error: `The script contains a URL pattern incompatible with Manifest V3: "${invalidPattern}". This pattern cannot be used to request permissions.`,
-      };
-   }
+   const { hostPatterns, needsAllUrls } = classifyMatchRulesForPermissions(matches);
 
    const required = {
       origins: new Set(),
       permissions: new Set(),
    };
 
-   // 2. Exclude script.meta.connect from host permissions (@connect is evaluated locally in GM_xmlhttpRequest)
-   hostPatterns.forEach((p) => { // Build origins solely from effective match patterns
-      new MatchPattern(p).toHostPermissions().forEach((perm) => required.origins.add(perm));
-   });
+   if (needsAllUrls) {
+      required.origins.add('<all_urls>');
+   } else {
+      hostPatterns.forEach((p) => {
+         new MatchPattern(p).toHostPermissions().forEach((perm) => required.origins.add(perm));
+      });
+   }
 
    ensureArray(script.meta.grant).forEach((grant) => {
       const apiPerms = GRANT_TO_PERMISSION_MAP[grant];
@@ -190,128 +218,19 @@ function isRunnableOnUrl(item, url) {
 }
 
 /**
- * Converts a userscript rule (wildcard string or regex literal) into a compiled RegExp object.
+ * Whether a userstyle should be injected into a frame.
+ * Styles that @match only the iframe origin (not the top tab) still apply to that frame.
+ * Styles that @match the top page still apply to iframes so @-moz-document blocks can run there.
  *
- * @param {string} pattern Pattern string (e.g. "https://*.example.com/*" or "/\\d+/").
- * @param {object} [options] Options for regex compilation.
- * @returns {RegExp|null} Compiled regular expression, or null if invalid.
+ * @param {object} style
+ * @param {string} frameUrl
+ * @param {string} [topUrl]
+ * @returns {boolean}
  */
-function parseRuleToRegex(pattern, options = {}) {
-   if (typeof pattern !== 'string' || !pattern.trim()) return null;
-   const trimmed = pattern.trim();
-
-   // Skip regex-literal detection for protocol-relative patterns
-   if (trimmed.startsWith('//')) {
-      return wildcardToRegex(trimmed, options);
-   }
-
-   // RegExp literal detection: /pattern/flags
-   if (trimmed[0] === '/') {
-      const lastSlash = trimmed.lastIndexOf('/');
-      if (lastSlash > 0) {
-         const body = trimmed.slice(1, lastSlash);
-         const flags = trimmed.slice(lastSlash + 1);
-         if (!/^[gimsuy]*$/.test(flags)) {
-            console.error(`Invalid regex flags in rule: "${pattern}"`);
-            return null;
-         }
-         try {
-            return new RegExp(body, flags || (options.caseInsensitive ? 'i' : ''));
-         } catch (err) {
-            console.error(`Invalid RegExp literal in rule: "${pattern}"`, err);
-            return null;
-         }
-      }
-   }
-
-   return wildcardToRegex(trimmed, options);
-}
-
-/**
- * Converts a wildcard pattern into a RegExp with host-aware logic emulating Tampermonkey behavior.
- * Caches compiled RegExp instances for performance.
- *
- * Features:
- * - Host-aware wildcards (`*` in host portion does not cross `/`).
- * - Supports `*.domain.com` matching both bare domain and subdomains.
- * - Supports protocol-relative (`//example.com`) and wildcard schemes (`*://`, `http*://`).
- *
- * @param {string} pattern Wildcard pattern string.
- * @param {object} [options] Conversion options.
- * @param {string[]} [options.defaultSchemes=['http', 'https', 'file', 'ftp']] Permitted scheme defaults.
- * @param {boolean} [options.allowLeadingStarDotToMatchBareDomain=true] Whether `*.domain.com` matches `domain.com`.
- * @param {boolean} [options.caseInsensitive=true] Case sensitivity flag.
- * @returns {RegExp|null} Compiled regular expression or null on error.
- */
-function wildcardToRegex(pattern, options = {}) {
-   const {
-      defaultSchemes = ['http', 'https', 'file', 'ftp'],
-      allowLeadingStarDotToMatchBareDomain = true,
-      caseInsensitive = true,
-   } = options;
-
-   const cacheKey = `${pattern}|${defaultSchemes.join(',')}|${allowLeadingStarDotToMatchBareDomain}|${caseInsensitive}`;
-   if (_regexCache.has(cacheKey)) return _regexCache.get(cacheKey);
-
-   let p = pattern;
-   let prefix = '^';
-
-   // Process protocol / scheme
-   if (p.startsWith('//')) {
-      prefix += '(?:[a-z][a-z0-9+.-]*:)?//';
-      p = p.slice(2);
-   } else {
-      const schemeMatch = p.match(/^([a-z*][a-z0-9+\-*]*):\/\//i);
-      if (schemeMatch) {
-         const schemeToken = schemeMatch[1];
-         if (schemeToken === '*') {
-            prefix += `(?:${defaultSchemes.join('|')})://`;
-         } else if (schemeToken.endsWith('*')) {
-            // example: http*:// => https?://
-            const base = schemeToken.replace('*', '');
-            prefix += base === 'http' ? 'https?://' : `(?:${base}[a-z]*)://`;
-         } else {
-            prefix += schemeToken + '://';
-         }
-         p = p.slice(schemeMatch[0].length);
-      } else {
-         prefix += '(?:[a-z][a-z0-9+.-]*://)?';
-      }
-   }
-
-   const slashIndex = p.indexOf('/');
-   const hostPart = slashIndex === -1 ? p : p.slice(0, slashIndex);
-   const pathPart = slashIndex === -1 ? '' : p.slice(slashIndex);
-
-   // Build host regex pattern
-   let hostRegex = '';
-   if (hostPart.length === 0) {
-      hostRegex = '[^/]+';
-   } else {
-      let host = hostPart;
-      if (allowLeadingStarDotToMatchBareDomain && host.startsWith('*.')) {
-         hostRegex += '(?:[^/:]+\\.)?';
-         host = host.slice(2);
-      }
-      hostRegex += host.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/:]*').replace(/\?/g, '[^/:]');
-      hostRegex += '(?::\\d+)?';
-   }
-
-   // Build path regex pattern (`*` crosses slashes)
-   const pathRegex = pathPart.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
-
-   const endsWithStar = pattern.endsWith('*');
-   const finalRegex = `${prefix}${hostRegex}${pathRegex}${endsWithStar ? '' : '$'}`;
-
-   try {
-      const re = new RegExp(finalRegex, caseInsensitive ? 'i' : '');
-      _regexCache.set(cacheKey, re);
-      return re;
-   } catch (err) {
-      console.error(`Failed to create RegExp from wildcard: "${pattern}"`, err);
-      _regexCache.set(cacheKey, null);
-      return null;
-   }
+function isStyleApplicableToFrame(style, frameUrl, topUrl) {
+   if (frameUrl && isRunnableOnUrl(style, frameUrl)) return true;
+   if (topUrl && topUrl !== frameUrl && isRunnableOnUrl(style, topUrl)) return true;
+   return false;
 }
 
 /**
@@ -357,7 +276,7 @@ async function fetchRequireCode(requireUrls, forceBypassCache = false, path = ne
 
             // Attempt network re-fetch for stale/missing entries
             try {
-               const response = await fetchWithTimeout(url, { allowedTypes: ALLOWED_SCRIPT_CONTENT_TYPES });
+               const response = await fetchWithTimeout(url, { allowedTypes: ALLOWED_SCRIPT_MEDIA_TYPES });
                await cache.put(url, response.clone());
                return await response.text();
             } catch (networkErr) {
@@ -427,7 +346,7 @@ async function fetchWithTimeout(url, { timeout = 8000, allowedTypes = [] } = {})
       }
 
       const contentType = response.headers.get('Content-Type') || '';
-      if (allowedTypes.length && !isDataUri && !allowedTypes.some((type) => contentType.startsWith(type))) {
+      if (allowedTypes.length && !isDataUri && !contentTypeMatchesAllowed(contentType, allowedTypes)) {
          throw new Error(`Invalid content type: ${contentType}`);
       }
       return response;
@@ -608,7 +527,7 @@ async function buildUserScriptConfig(script, { injectionContext = {} } = {}) {
    const pageToken = injectionContext?.pageToken || '';
    const safeSourceName = encodeURIComponent((scriptName || 'Script').replace(/[^a-zA-Z0-9_-]/g, '_'));
    if (!isGrantNone) {
-      const { apiProviderCode, grants: exposedGrants } = generateGmApiCode({ meta });
+      const { apiProviderCode, grants: exposedGrants, allowedApis = [] } = generateGmApiCode({ meta });
       const storageCache = await getStorageCache(script, meta);
 
       // Pre-fetch all @resource files to guarantee synchronous execution of GM_getResourceText/URL
@@ -641,6 +560,7 @@ async function buildUserScriptConfig(script, { injectionContext = {} } = {}) {
          manifest,
          storageCache,
          resourceCache,
+         allowedApis,
       };
 
       // Filter out grants containing object dots (e.g. GM.getValue) to avoid JS SyntaxErrors during var generation
@@ -758,7 +678,10 @@ export default {
    buildUserScriptConfig,
    handlePermissionCheck,
    isRunnableOnUrl,
+   isStyleApplicableToFrame,
    getEffectiveRules,
+   extractMatchPatternsFromStyle,
+   classifyMatchRulesForPermissions,
 
    // --- Pattern & String Utilities ---
    parseRuleToRegex,

@@ -69,8 +69,8 @@ const CacheManager = {
          logger.debug(CONTEXT, `Cache refreshed. Total scripts: ${this._scriptMap.size}`);
       } catch (err) {
          logger.error(CONTEXT, 'Failed to refresh cache:', err);
-         // Fallback to a clean Map on DB read failure to prevent undefined state exceptions
-         this._scriptMap = new Map();
+         // Keep the last successful map. Replacing it with [] makes injection and
+         // GET_ALL_SCRIPTS look like a wipe even though IndexedDB is intact.
       }
    },
 
@@ -90,7 +90,8 @@ const CacheManager = {
     */
    async getById(id) {
       if (!this._isInitialized) await this.initialize();
-      return this._scriptMap.get(id);
+      const numericId = typeof id === 'string' && /^\d+$/.test(id.trim()) ? Number(id) : id;
+      return this._scriptMap.get(numericId);
    },
 };
 

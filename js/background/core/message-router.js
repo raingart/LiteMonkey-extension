@@ -10,10 +10,12 @@ import UpdateService from '../services/update-service.js';
 import GDriveService from '../services/gdrive-service.js';
 import UpdateScheduler from '../services/update-scheduler.js';
 import BadgeManager from '../services/badge-manager.js';
+import StyleInjector from '../services/style-injector.js';
 import LockManager from './lock-manager.js';
 import Utils from '../utils.js';
 import { logger } from '../../libs/logger.js';
-import { isRestrictedUrl } from '../../constants.js';
+import { isRestrictedUrl, DEFAULT_SETTINGS } from '../../constants.js';
+import { messageAllowedByGrants } from '../../gm-grants.js';
 
 const CONTEXT = 'MessageRouter';
 
@@ -61,6 +63,8 @@ const withCacheRefresh = (action) => async (...args) => {
    const result = await action(...args);
    if (result?.success) {
       await CacheManager.refresh();
+      await StyleInjector.resyncOpenTabs().catch(() => { });
+      await BadgeManager.updateBadgeForAllTabs().catch(() => { });
    }
    return result;
 };
@@ -124,10 +128,6 @@ const requestHandlers = {
       return { success: true };
    }),
    [MSG.IMPORT_SCRIPTS]: withLockAndRefresh(({ scripts }) => ScriptRegistry.importScripts(scripts)),
-   [MSG.DELETE_ALL_SCRIPTS]: withLockAndRefresh(async () => {
-      await agents.clearAll();
-      return { success: true };
-   }),
    [MSG.SET_SCRIPT_STORAGE]: withLock(async ({ scriptId, storageObject }) => {
       await agents.setFullStorage(scriptId, storageObject);
       return { success: true };
@@ -138,7 +138,7 @@ const requestHandlers = {
    [MSG.GM_GET_FULL_STORAGE]: (payload) => ApiHandler.getFullStorage(payload),
    [MSG.GM_LIST_VALUES]: (payload) => ApiHandler.listGmValues(payload),
    [MSG.GM_GET_VALUE]: (payload) => ApiHandler.getGmValue(payload),
-   [MSG.GM_SET_VALUE]: async (payload, sender) => {
+   [MSG.GM_SET_VALUE]: withLock(async (payload, sender) => {
       const result = await ApiHandler.setGmValue(payload, sender);
       if (result.success && result.changed) {
          MessageRouter.broadcastValueChange({
@@ -151,7 +151,7 @@ const requestHandlers = {
          });
       }
       return { success: result.success, error: result.error };
-   },
+   }),
    [MSG.GM_DELETE_VALUE]: async (payload, sender) => {
       const result = await ApiHandler.deleteGmValue(payload, sender);
       if (result.success && result.changed) {
@@ -183,7 +183,7 @@ const requestHandlers = {
       });
       return FIRE_AND_FORGET;
    },
-   [MSG.GM_SET_CLIPBOARD]: (payload) => ApiHandler.handleSetClipboard(payload),
+   [MSG.GM_SET_CLIPBOARD]: (payload, sender) => ApiHandler.handleSetClipboard(payload, sender),
    [MSG.GM_DOWNLOAD]: (payload, sender) => ApiHandler.handleDownload(payload, sender),
    [MSG.GM_NOTIFICATION]: (payload, sender) => ApiHandler.handleNotification(payload, sender),
    [MSG.GM_OPEN_IN_TAB]: (payload, sender) => ApiHandler.handleOpenInTab(payload, sender),
@@ -241,13 +241,13 @@ const requestHandlers = {
 
    // --- Logging ---
    [MSG.GET_LOGS_FOR_TAB]: async ({ tabId }) => ({ logs: await LogManager.getLogs(tabId) }),
-   [MSG.GET_LOG_LEVEL]: () => browser.storage.local.get({ logLevel: 3 }),
+   [MSG.GET_LOG_LEVEL]: () => browser.storage.local.get({ logLevel: DEFAULT_SETTINGS.logLevel }),
    [MSG.LOG_MESSAGE]: ({ scriptId, log }, sender) => {
       LogManager.addLog(sender.tab?.id, scriptId, log);
       return FIRE_AND_FORGET;
    },
-   [MSG.CLEAR_LOGS_FOR_SCRIPT_IN_TAB]: ({ scriptId }, sender) => {
-      LogManager.clearLogsForScript(sender.tab?.id, scriptId);
+   [MSG.CLEAR_LOGS_FOR_SCRIPT_IN_TAB]: ({ scriptId, tabId }, sender) => {
+      LogManager.clearLogsForScript(tabId ?? sender.tab?.id, scriptId);
       return FIRE_AND_FORGET;
    },
 };
@@ -334,21 +334,43 @@ const MessageRouter = {
             return;
          }
 
-         Promise.resolve(handler(payload ?? {}, sender))
-            .then((response) => {
-               // Guarantee closing Chrome IPC ports for "fire and forget" messages
-               if (response !== FIRE_AND_FORGET) {
-                  safeSendResponse(response);
-               } else {
-                  safeSendResponse({ success: true });
-               }
-            })
-            .catch((error) => {
-               const errorMsg = error?.message ?? String(error);
-               logger.error(CONTEXT, `Error handling message "${type}":`, error);
-               ErrorCollector.captureAndReport(error, { trace_name: 'MessageRouter.handleMessage', type });
-               safeSendResponse({ success: false, error: errorMsg });
-            });
+         const runHandler = () => {
+            Promise.resolve(handler(payload ?? {}, sender))
+               .then((response) => {
+                  // Guarantee closing Chrome IPC ports for "fire and forget" messages
+                  if (response !== FIRE_AND_FORGET) {
+                     safeSendResponse(response);
+                  } else {
+                     safeSendResponse({ success: true });
+                  }
+               })
+               .catch((error) => {
+                  const errorMsg = error?.message ?? String(error);
+                  logger.error(CONTEXT, `Error handling message "${type}":`, error);
+                  ErrorCollector.captureAndReport(error, { trace_name: 'MessageRouter.handleMessage', type });
+                  safeSendResponse({ success: false, error: errorMsg });
+               });
+         };
+
+         // Server-side @grant gate: page-world filtering is not enough if a script spoofs IPC
+         if (sender.tab && !isFromExtensionPage && type.startsWith('gm-')) {
+            CacheManager.getById(payload?.scriptId)
+               .then((script) => {
+                  if (!messageAllowedByGrants(type, script?.meta?.grant)) {
+                     logger.error(CONTEXT, `Blocked ungranted API "${type}" for script ${payload?.scriptId}.`);
+                     safeSendResponse({ success: false, error: 'This GM API was not declared in @grant.' });
+                     return;
+                  }
+                  runHandler();
+               })
+               .catch((err) => {
+                  logger.error(CONTEXT, 'Grant verification failed:', err);
+                  safeSendResponse({ success: false, error: 'Grant verification failed.' });
+               });
+            return;
+         }
+
+         runHandler();
       };
 
       // Comprehensive token validation for all tab requests associated with a script context

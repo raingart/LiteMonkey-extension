@@ -2,8 +2,8 @@
 
 # 🐵 Lite Monkey
 
-**Lightweight, High-Performance Manifest V3 Userscript & UserStyle Manager**  
-*Built for Chromium (Chrome, Edge, Brave, Vivaldi) & Mozilla Firefox*
+**Lightweight Manifest V3 Userscript & UserStyle Manager**  
+*Chrome, Edge, Brave, Vivaldi, and Firefox — plain JS ESM, no bundler*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-success.svg)](MANIFEST_GUIDE.md)
@@ -13,69 +13,71 @@
 
 ---
 
-## ✨ Features
+## Features
 
-- ⚡ **Manifest V3 Native Performance**: Strict non-blocking Service Worker architecture with DeclarativeNetRequest navigation interception.
-- 🎨 **CodeMirror 6 Editor & UserStyles**: Built-in syntax highlighting, live formatting with Prettier, and full `@-moz-document` UserStyle support.
-- 🔒 **Security First**: Cryptographic `pageToken` isolation preventing host page spoofing or event hijacking of privileged `GM_*` APIs.
-- ☁️ **Google Drive Backup Sync**: Seamless `appDataFolder` cloud synchronization for scripts and GM storage data.
-- 🌐 **Cross-Browser Core**: Fully compliant with Chrome Web Store and Firefox AMO submission standards.
-- 🧪 **Automated Testing Suite**: Native zero-dependency unit and integration test suite covering pattern matching, metadata parsing, versioning, and rules evaluation.
-
----
-
-## 🚀 Quick Start & Installation
-
-### Option 1: Chrome / Chromium Browsers
-1. Download `lite-monkey-chrome-v1.0.0.zip` from [Releases](../../releases) or run `./package-extensions.sh`.
-2. Open `chrome://extensions` in your browser.
-3. Enable **Developer mode** in the top-right toggle.
-4. Drag and drop the extracted extension folder or click **Load unpacked**.
-
-### Option 2: Mozilla Firefox
-1. Download `lite-monkey-firefox-v1.0.0.zip` from [Releases](../../releases).
-2. Open `about:debugging#/runtime/this-firefox` in Firefox.
-3. Click **Load Temporary Add-on...** and select `manifest.json`.
+- **Userscripts & UserStyles**: Greasemonkey/Tampermonkey-style `.user.js` plus `.user.css`. UserStyles without `@match` pick up `@-moz-document` rules automatically.
+- **`@grant` enforcement**: Only APIs listed in the script header are exposed in the page and accepted by the background handler.
+- **Installer**: Top-level navigations to `.user.js` open the install UI. GitHub **blob** pages are not intercepted (they are HTML); `raw.githubusercontent.com` and Greasy Fork CDNs are. Downloads must be JavaScript or `text/plain`, not `text/html`.
+- **SPA re-evaluation**: History / URL changes re-run match rules and inject newly matching scripts and styles.
+- **Isolation**: Isolated-world `bootstrap.js` talks to MAIN-world `gm-api-provider.js` over a per-page `pageToken` (CustomEvent uplink, not `postMessage('*')`).
+- **Chrome vs Firefox**: Chrome uses a module service worker and an offscreen document for XHR/clipboard. Firefox uses an event page (`background.scripts` + `service_worker` + `"type": "module"`) and runs XHR in the worker when offscreen is unavailable.
+- **Backup & Drive**: Local import/export and Google Drive `appDataFolder` sync keep `customUrls` and `sourceUrl` (site exclusions and update URLs).
+- **Editor**: CodeMirror 6, Prettier, GM storage panel, URL tester that uses the same match engine as injection (including regex `@include`).
 
 ---
 
-## 🛠️ Developer Setup & Testing
+## Quick start
 
-### Running Tests
-Execute the native Node.js ESM test suite:
+### Chrome / Chromium
+
+Root `manifest.json` is the Chromium manifest. Load the repo folder unpacked, or a built zip:
+
+1. `npm run build` (Linux/macOS) or `npm run build:win` (Windows), then unpack `build/lite-monkey-chrome-v1.0.0.zip`.
+2. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**.
+
+### Firefox
+
+Root `manifest.json` is **not** the Firefox manifest. Use the Firefox zip (it copies `manifest.firefox.json` → `manifest.json`):
+
+1. `npm run build:win` or `npm run build`.
+2. Unpack `build/lite-monkey-firefox-v1.0.0.zip`.
+3. `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → select that folder’s `manifest.json`.
+
+Temporary add-ons are cleared when Firefox restarts.
+
+---
+
+## Developer setup & tests
+
 ```bash
 npm test
 ```
 
-### Packaging Store Releases
-Generate clean, distribution-ready release ZIP packages for Chromium and Firefox:
+That runs `node --test tests/*.test.js` (ESM, no extra test runner). Coverage includes metadata parsing, match/`@include` rules, `@grant` allow-lists, origin/`@connect`/cookie host checks, installer DNR regex, script Content-Type allowlist, backup field mapping, and UserStyle `@-moz-document` inference.
 
-**Linux / macOS (Bash)**:
+### Packaging
+
 ```bash
-npm run build        # or ./package-extensions.sh
+npm run build        # Linux / macOS → ./package-extensions.sh
+npm run build:win    # Windows     → .\package-extensions.ps1
 ```
 
-**Windows (PowerShell)**:
-```powershell
-npm run build:win    # or .\package-extensions.ps1
-```
+Output:
 
-Build archives will be generated in `./build/`:
 - `build/lite-monkey-chrome-v1.0.0.zip`
 - `build/lite-monkey-firefox-v1.0.0.zip`
 
 ---
 
-## 📖 Architecture & Guides
+## Architecture & guides
 
-- 🗺️ [Project & Architecture Map](PROJECT_MAP.md)
-- 📋 [Comprehensive Code Audit & QA Report](AUDIT_REPORT.md)
-- 📜 [Manifest V3 & Cross-Browser Guide](MANIFEST_GUIDE.md)
-- 🛠️ [Build & Asset Mirroring Guide](BUILD_INSTRUCTIONS.md)
-- 🧪 [Test Userscripts Collection](tests/test-scripts/)
+- [Project & Architecture Map](PROJECT_MAP.md)
+- [Manifest V3 & Cross-Browser Guide](MANIFEST_GUIDE.md)
+- [Build & Asset Mirroring Guide](BUILD_INSTRUCTIONS.md)
+- [Test Userscripts](tests/test-scripts/)
 
 ---
 
-## ⚖️ License
+## License
 
-Distributed under the [MIT License](LICENSE). Made with ❤️ for the open-source community.
+[MIT](LICENSE).

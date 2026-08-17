@@ -1,6 +1,7 @@
 import browser from '../../libs/browser-support.js';
 import { agents } from '../../database.js';
 import { logger } from '../../libs/logger.js';
+import Utils from '../utils.js';
 
 const CONTEXT = 'GDriveService';
 const manifest = browser.runtime.getManifest();
@@ -299,6 +300,9 @@ class GDriveServiceImpl {
          userCode: script.userCode,
          meta: script.meta,
          config: script.config,
+         customUrls: script.customUrls ?? null,
+         sourceUrl: script.sourceUrl ?? null,
+         position: script.position,
          storage,
       };
 
@@ -384,6 +388,9 @@ class GDriveServiceImpl {
          userCode: cloudData.userCode,
          meta: cloudData.meta,
          config: cloudData.config,
+         customUrls: cloudData.customUrls ?? localAnalogue?.customUrls ?? null,
+         sourceUrl: cloudData.sourceUrl ?? localAnalogue?.sourceUrl ?? null,
+         position: cloudData.position ?? localAnalogue?.position,
          state: cloudData.state || {},
          updatedAt: cloudUpdatedAt || cloudData.updatedAt || Date.now(),
       };

@@ -7,8 +7,12 @@ import { isRestrictedUrl } from '../../constants.js';
 
 const CONTEXT = 'StyleInjector';
 
-/** @type {Map<number, Set<number>>} Tracks injected style IDs per tab to avoid redundant CSS stacking */
-const _injectedTabStyles = new Map();  // Track injected style IDs per tab
+/** @type {Map<number, Map<number, string>>} Injected top-frame CSS per tab: styleId → css text (for removeCSS) */
+const _injectedTopCss = new Map();
+/** @type {Set<number>} Tabs that already received a subframe CSS pass for the current navigation */
+const _subframesInjected = new Set();
+/** @type {Set<number>} Tabs with a pending delayed subframe retry */
+const _subframeRetryScheduled = new Set();
 
 /**
  * Injects userstyle (`.css`) scripts into web pages.
@@ -21,7 +25,11 @@ const StyleInjector = {
     */
    initialize() {
       browser.tabs.onUpdated.addListener((...args) => this.onTabUpdated(...args));
-      browser.tabs.onRemoved.addListener((tabId) => _injectedTabStyles.delete(tabId)); // Clean up tab style cache on tab removal
+      browser.tabs.onRemoved.addListener((tabId) => {
+         _injectedTopCss.delete(tabId);
+         _subframesInjected.delete(tabId);
+         _subframeRetryScheduled.delete(tabId);
+      });
       logger.debug(CONTEXT, 'Initialized');
    },
 
@@ -36,42 +44,40 @@ const StyleInjector = {
       const url = changeInfo.url || tab.url;
       const status = changeInfo.status;
 
-      // Inject styles at 'loading' stage to apply CSS synchronously and avoid Flash of Unstyled Content (FOUC)
-      if (status !== 'loading' || isRestrictedUrl(url)) return;
+      if (!url || isRestrictedUrl(url)) return;
 
-      // Clear style injection cache for tab on new top-level document
-      if (changeInfo.url) {
-         _injectedTabStyles.delete(tabId);
+      // Full document navigation: drop per-tab injection bookkeeping.
+      if (changeInfo.status === 'loading' && changeInfo.url) {
+         _injectedTopCss.delete(tabId);
+         _subframesInjected.delete(tabId);
+         _subframeRetryScheduled.delete(tabId);
       }
+
+      if (status !== 'loading' && status !== 'complete' && !changeInfo.url) return;
 
       try {
          const { isPaused = false } = await browser.storage.session.get('isPaused');
          if (isPaused) return;
 
-         const allStyles = await CacheManager.get();
-         const matchingStyles = allStyles.filter(
-            (style) =>
-               style.enabled &&
-               style.type === 'userstyle' &&
-               Utils.isRunnableOnUrl(style, url)
-         );
+         await this.syncTopFrame(tabId, url);
 
-         // Fetch full CSS code from database only for userstyles matching the active URL
-         if (matchingStyles.length > 0) {
-            const injectedSet = _injectedTabStyles.get(tabId) || new Set();
+         // complete and SPA url changes: inject into iframes. SPA clears the one-shot
+         // flag so newly matching iframe styles apply after History API navigations.
+         if (changeInfo.url && status !== 'loading') {
+            _subframesInjected.delete(tabId);
+         }
 
-            // Filter out styles that have already been injected into the active tab context
-            const unappliedStyles = matchingStyles.filter((s) => !injectedSet.has(s.id));
+         if (status === 'loading') return;
 
-            if (unappliedStyles.length > 0) {
-               const fullStyles = await Promise.all(
-                  unappliedStyles.map((s) => agents.getFullScript(s.id))
-               );
-               await this.injectStyles(tabId, fullStyles.filter(Boolean), url);
+         await this.injectSubframesIfNeeded(tabId, url);
 
-               unappliedStyles.forEach((s) => injectedSet.add(s.id));
-               _injectedTabStyles.set(tabId, injectedSet);
-            }
+         if (status === 'complete' && !_subframeRetryScheduled.has(tabId)) {
+            _subframeRetryScheduled.add(tabId);
+            setTimeout(() => {
+               _subframeRetryScheduled.delete(tabId);
+               _subframesInjected.delete(tabId);
+               this.injectSubframesIfNeeded(tabId, url).catch((error) => this.handleInjectionError(tabId, error));
+            }, 800);
          }
       } catch (error) {
          this.handleInjectionError(tabId, error);
@@ -201,6 +207,91 @@ const StyleInjector = {
    },
 
    /**
+    * Inserts or removes top-frame CSS so enabled matching styles match the current URL.
+    * @param {number} tabId
+    * @param {string} url
+    */
+   async syncTopFrame(tabId, url) {
+      const injectedMap = _injectedTopCss.get(tabId) || new Map();
+      const allStyles = await CacheManager.get();
+      const matching = allStyles.filter(
+         (style) => style.enabled && style.type === 'userstyle' && Utils.isRunnableOnUrl(style, url)
+      );
+      const matchingIds = new Set(matching.map((s) => s.id));
+
+      for (const [styleId, css] of [...injectedMap]) {
+         if (matchingIds.has(styleId)) continue;
+         await this.removeCss(tabId, [0], css);
+         injectedMap.delete(styleId);
+      }
+
+      for (const style of matching) {
+         if (injectedMap.has(style.id)) continue;
+         const full = style.userCode ? style : await agents.getFullScript(style.id);
+         if (!full?.userCode) continue;
+         const css = this.extractInjectableCss(full.userCode, url);
+         if (!css) continue;
+         await this.insertCss(tabId, [0], css);
+         injectedMap.set(style.id, css);
+      }
+
+      _injectedTopCss.set(tabId, injectedMap);
+   },
+
+   /**
+    * Re-syncs userstyles on all open tabs after cache mutations (enable/disable/save).
+    */
+   async resyncOpenTabs() {
+      const tabs = await browser.tabs.query({});
+      await Promise.all(tabs.map(async (tab) => {
+         if (!tab?.id || !tab.url || isRestrictedUrl(tab.url)) return;
+         try {
+            await this.syncTopFrame(tab.id, tab.url);
+            _subframesInjected.delete(tab.id);
+            await this.injectSubframesIfNeeded(tab.id, tab.url);
+         } catch (error) {
+            this.handleInjectionError(tab.id, error);
+         }
+      }));
+   },
+
+   async insertCss(tabId, frameIds, css) {
+      if (!css) return;
+      await browser.scripting.insertCSS({
+         target: { tabId, frameIds },
+         css,
+         origin: 'USER',
+      });
+   },
+
+   async removeCss(tabId, frameIds, css) {
+      if (!css) return;
+      try {
+         await browser.scripting.removeCSS({
+            target: { tabId, frameIds },
+            css,
+            origin: 'USER',
+         });
+      } catch {
+         // Frame or tab may already be gone
+      }
+   },
+
+   async injectSubframesIfNeeded(tabId, url) {
+      if (_subframesInjected.has(tabId)) return;
+      _subframesInjected.add(tabId);
+
+      const allStyles = await CacheManager.get();
+      const enabledStyles = allStyles.filter((style) => style.enabled && style.type === 'userstyle');
+      if (enabledStyles.length === 0) return;
+
+      const fullEnabled = await Promise.all(
+         enabledStyles.map((s) => (s.userCode ? s : agents.getFullScript(s.id)))
+      );
+      await this.injectStylesIntoSubframes(tabId, fullEnabled.filter(Boolean), url);
+   },
+
+   /**
     * Merges and injects multiple style objects into a tab.
     * @private
     * @param {number} tabId - The ID of the target tab.
@@ -208,17 +299,52 @@ const StyleInjector = {
     * @returns {Promise<void>}
     */
    async injectStyles(tabId, styles, url) {
-      const combinedCss = styles
-         .map(({ userCode }) => this.extractInjectableCss(userCode, url))
-         .filter(Boolean)
-         .join('\n\n/* --- Userstyle Separator --- */\n\n');
+      for (const style of styles) {
+         const css = this.extractInjectableCss(style.userCode, url);
+         if (!css) continue;
+         await this.insertCss(tabId, [0], css);
+      }
+   },
 
-      if (combinedCss) {
-         await browser.scripting.insertCSS({
-            target: { tabId },
-            css: combinedCss,
-            origin: 'USER', // Inject as USER origin to ensure userstyles override site AUTHOR styles
+   /**
+    * Injects CSS into iframes, evaluating @-moz-document against each frame URL.
+    * @private
+    */
+   async injectStylesIntoSubframes(tabId, styles, topUrl) {
+      let frameResults;
+      try {
+         frameResults = await browser.scripting.executeScript({
+            target: { tabId, allFrames: true },
+            func: () => window.location.href,
          });
+      } catch (err) {
+         logger.debug(CONTEXT, `Could not enumerate frames for tab ${tabId}:`, err);
+         return;
+      }
+
+      for (const result of frameResults || []) {
+         const frameId = result?.frameId;
+         const frameUrl = result?.result;
+         if (typeof frameId !== 'number' || frameId === 0 || typeof frameUrl !== 'string') continue;
+         if (isRestrictedUrl(frameUrl)) continue;
+
+         const applicable = styles.filter((style) => Utils.isStyleApplicableToFrame(style, frameUrl, topUrl));
+         const combinedCss = applicable
+            .map(({ userCode }) => this.extractInjectableCss(userCode, frameUrl))
+            .filter(Boolean)
+            .join('\n\n/* --- Userstyle Separator --- */\n\n');
+
+         if (!combinedCss) continue;
+
+         try {
+            await browser.scripting.insertCSS({
+               target: { tabId, frameIds: [frameId] },
+               css: combinedCss,
+               origin: 'USER',
+            });
+         } catch (err) {
+            logger.debug(CONTEXT, `Subframe style inject failed for tab ${tabId} frame ${frameId}:`, err);
+         }
       }
    },
 

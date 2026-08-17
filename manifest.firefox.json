@@ -1,7 +1,7 @@
 {
    "manifest_version": 3,
    "name": "__MSG_app_name__",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "default_locale": "en",
    "description": "__MSG_app_description__",
    "icons": {
@@ -20,9 +20,7 @@
    "optional_permissions": [
       "notifications",
       "downloads",
-      "clipboardWrite",
-      "tabs",
-      "identity"
+      "clipboardWrite"
    ],
    "oauth2": {
       "client_id": "944057621702-pbvkee2q60t3bvl8rplrds5705d0vrsd.apps.googleusercontent.com",
@@ -30,12 +28,26 @@
          "https://www.googleapis.com/auth/drive.appdata"
       ]
    },
-   "host_permissions": [],
+   "host_permissions": [
+      "*://greasyfork.org/*",
+      "*://update.greasyfork.org/*",
+      "*://sleazyfork.org/*",
+      "*://update.sleazyfork.org/*",
+      "*://openuserjs.org/*",
+      "*://github.com/*",
+      "*://raw.githubusercontent.com/*",
+      "*://gist.githubusercontent.com/*",
+      "*://www.userscript.zone/*"
+   ],
    "optional_host_permissions": [
       "<all_urls>"
    ],
    "background": {
-      "service_worker": "js/background/main.js"
+      "scripts": [
+         "js/background/main.js"
+      ],
+      "service_worker": "js/background/main.js",
+      "type": "module"
    },
    "content_scripts": [
       {
@@ -46,7 +58,8 @@
             "<all_urls>"
          ],
          "run_at": "document_start",
-         "all_frames": true
+         "all_frames": true,
+         "world": "ISOLATED"
       }
    ],
    "action": {
@@ -68,8 +81,16 @@
    ],
    "browser_specific_settings": {
       "gecko": {
-         "id": "raingart@protonmail.com",
-         "strict_min_version": "113.0"
+         "id": "lite-monkey@raingart",
+         "strict_min_version": "140.0",
+         "data_collection_permissions": {
+            "required": [
+               "personallyIdentifyingInfo"
+            ]
+         }
+      },
+      "gecko_android": {
+         "strict_min_version": "142.0"
       }
    }
 }

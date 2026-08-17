@@ -31,6 +31,27 @@ describe('Lite Monkey Extension Packaging & Integrity Tests', () => {
       const parsed = JSON.parse(content);
       assert.strictEqual(parsed.manifest_version, 3);
       assert.ok(parsed.browser_specific_settings?.gecko?.id);
+      assert.strictEqual(parsed.background?.type, 'module');
+      assert.ok(parsed.background?.service_worker);
+      assert.deepEqual(parsed.background?.scripts, [parsed.background.service_worker]);
+   });
+
+   test('installer host_permissions cover GreasyFork site and update CDNs', () => {
+      const requiredHosts = [
+         '*://greasyfork.org/*',
+         '*://update.greasyfork.org/*',
+         '*://sleazyfork.org/*',
+         '*://update.sleazyfork.org/*',
+      ];
+      for (const file of ['manifest.json', 'manifest.chrome.json', 'manifest.firefox.json']) {
+         const parsed = JSON.parse(fs.readFileSync(path.join(projectRoot, file), 'utf8'));
+         for (const host of requiredHosts) {
+            assert.ok(
+               parsed.host_permissions?.includes(host),
+               `${file} missing host_permission ${host}`
+            );
+         }
+      }
    });
 
    test('Core HTML pages and essential JS entrypoints must exist', () => {
@@ -49,6 +70,22 @@ describe('Lite Monkey Extension Packaging & Integrity Tests', () => {
          const filePath = path.join(projectRoot, file);
          assert.ok(fs.existsSync(filePath), `Essential file missing: ${file}`);
       }
+   });
+
+   test('options and popup HTML button tags are balanced', () => {
+      for (const file of ['html/options.html', 'html/popup.html', 'html/installer.html']) {
+         const html = fs.readFileSync(path.join(projectRoot, file), 'utf8');
+         const opens = (html.match(/<button\b/gi) || []).length;
+         const closes = (html.match(/<\/button>/gi) || []).length;
+         assert.equal(opens, closes, `${file}: ${opens} opening vs ${closes} closing <button> tags`);
+      }
+   });
+
+   test('paused popup list does not disable pointer events on script items', () => {
+      const css = fs.readFileSync(path.join(projectRoot, 'css/style.css'), 'utf8');
+      const pausedRule = css.match(/#script-list\.is-paused\s+\.script-item\s*\{[^}]+\}/);
+      assert.ok(pausedRule, 'paused script-item rule missing');
+      assert.equal(/pointer-events\s*:\s*none/i.test(pausedRule[0]), false);
    });
 
    test('All internal ES module imports in background entrypoint should exist', () => {

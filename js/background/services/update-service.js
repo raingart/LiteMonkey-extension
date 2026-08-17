@@ -4,6 +4,8 @@ import ScriptRegistry from './script-registry.js';
 import Utils from '../utils.js';
 import { logger } from '../../libs/logger.js';
 import CacheManager from './cache-manager.js';
+import { compareSemanticVersions } from '../../libs/semver.js';
+import { ALLOWED_SCRIPT_MEDIA_TYPES } from '../../constants.js';
 
 const CONTEXT = 'UpdateService';
 
@@ -12,8 +14,6 @@ const CONTEXT = 'UpdateService';
  * Prevents flooding network connection pools and hitting host rate limits during bulk update checks.
  */
 const CONCURRENT_LIMIT = 5;
-
-const ALLOWED_SCRIPT_CONTENT_TYPES = ['text/', 'application/javascript', 'application/x-javascript'];
 
 /**
  * Defensive normalization helper extracting a single scalar string from strings or arrays.
@@ -26,48 +26,17 @@ const toScalarString = (val) => {
    return String(val).trim();
 };
 
-/**
- * Compares two semantic version strings (e.g., "1.2.3-beta.2" vs "1.3.0").
- * @param {string|Array<string>} versionA - Current version.
- * @param {string|Array<string>} versionB - Remote version.
- * @returns {number} Positive number if versionB is newer, negative if versionA is newer, or 0 if equal.
- */
-const compareSemanticVersions = (versionA, versionB) => {
-   // Coerce input operands into guaranteed scalar strings
-   const strA = toScalarString(versionA);
-   const strB = toScalarString(versionB);
-
-   // Normalize versions: trim whitespace and strip leading 'v' or 'V' prefixes
-   const safeA = (strA || '0').replace(/^v/i, '');
-   const safeB = (strB || '0').replace(/^v/i, '');
-
-   const [mainA, preA = ''] = safeA.split('-');
-   const [mainB, preB = ''] = safeB.split('-');
-
-   const partsA = mainA.split('.').map(Number).filter(Number.isFinite);
-   const partsB = mainB.split('.').map(Number).filter(Number.isFinite);
-   const maxLength = Math.max(partsA.length, partsB.length);
-
-   for (let i = 0; i < maxLength; i++) {
-      const partA = partsA[i] ?? 0;
-      const partB = partsB[i] ?? 0;
-      if (partB > partA) return 1;
-      if (partA > partB) return -1;
+const isHttpSourceUrl = (url) => {
+   const value = toScalarString(url);
+   if (!value) return false;
+   try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+   } catch {
+      return false;
    }
-
-   // According to SemVer spec, a release version (no pre-release) is NEWER than a pre-release version
-   if (preA && !preB) return 1;
-   if (!preA && preB) return -1;
-   if (preA && preB) return preB.localeCompare(preA, undefined, { numeric: true });
-
-   return 0;
 };
 
-/**
- * Creates a promise-queue concurrency limiter for asynchronous network tasks.
- * @param {number} concurrency - Maximum number of simultaneous async tasks.
- * @returns {function(function(): Promise<*>): Promise<*>} Concurrency wrapper function.
- */
 const createConcurrencyLimiter = (concurrency) => {
    const queue = [];
    let activeCount = 0;
@@ -151,7 +120,9 @@ const UpdateService = {
       try {
          const allScripts = await agents.getAllMeta();
          const scriptsToCheck = allScripts.filter(
-            ({ enabled, meta }) => enabled && (meta.updateURL || meta.downloadURL) && meta.version
+            ({ enabled, meta, sourceUrl }) =>
+               enabled &&
+               (meta.updateURL || meta.downloadURL || isHttpSourceUrl(sourceUrl))
          );
 
          if (!scriptsToCheck.length) {
@@ -199,9 +170,14 @@ const UpdateService = {
    async checkSingleScript(script) {
       const { meta: currentMeta } = script;
       // Extract scalar string URLs
-      const rawUpdateUrl = currentMeta.updateURL ?? currentMeta.downloadURL;
+      const rawUpdateUrl = currentMeta.updateURL ?? currentMeta.downloadURL
+         ?? (isHttpSourceUrl(script.sourceUrl) ? script.sourceUrl : '');
       const updateUrl = toScalarString(rawUpdateUrl);
       const scriptName = toScalarString(currentMeta.name);
+
+      if (!updateUrl) {
+         return null;
+      }
 
       try {
          const { remoteMeta, remoteMetaCode } = await this._fetchAndParseRemoteMeta(updateUrl, currentMeta.name);
@@ -287,7 +263,7 @@ const UpdateService = {
     * @returns {Promise<{remoteMeta?: Object, remoteMetaCode?: string}>}
     */
    async _fetchAndParseRemoteMeta(url, scriptName) {
-      const response = await Utils.fetchWithTimeout(url, { allowedTypes: ALLOWED_SCRIPT_CONTENT_TYPES });
+      const response = await Utils.fetchWithTimeout(url, { allowedTypes: ALLOWED_SCRIPT_MEDIA_TYPES });
       const remoteMetaCode = await response.text();
       const { meta: remoteMeta } = MetadataParser.parse(remoteMetaCode);
 
@@ -312,7 +288,7 @@ const UpdateService = {
 
       return downloadUrl === updateUrl && !updateUrl.endsWith('.meta.js')
          ? remoteMetaCode
-         : await Utils.fetchWithTimeout(downloadUrl, { allowedTypes: ALLOWED_SCRIPT_CONTENT_TYPES }).then((res) => res.text());
+         : await Utils.fetchWithTimeout(downloadUrl, { allowedTypes: ALLOWED_SCRIPT_MEDIA_TYPES }).then((res) => res.text());
    },
 
    /**

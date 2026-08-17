@@ -6,7 +6,8 @@ import { i18n } from '../libs/localization.js';
 import { escapeHTML } from '../ui/utils/dom-utils.js';
 import { logger } from '../libs/logger.js';
 import { sendMessageWithRetry } from '../libs/message-service.js';
-import { TRUSTED_SCRIPT_HOSTS, MAX_SCRIPT_SIZE, isTrustedScriptHost } from '../constants.js';
+import { MAX_SCRIPT_SIZE, isTrustedScriptHost, isAllowedScriptContentType } from '../constants.js';
+import { compareSemanticVersions } from '../libs/semver.js';
 
 const CONTEXT = 'InstallerUI';
 
@@ -78,7 +79,6 @@ class InstallerUI {
     * @param {string} url Target URL of the .user.js script
     */
    async #loadScriptFromURL(url) {
-      const MAX_SCRIPT_SIZE = 5 * 1024 * 1024; // 5MB limit
       this._setUIState('loading');
 
       let response;
@@ -95,6 +95,11 @@ class InstallerUI {
 
       if (!response.ok) {
          throw new Error(i18n('installer_error_http_status', [String(response.status)]));
+      }
+
+      const contentType = response.headers.get('Content-Type') || '';
+      if (!isAllowedScriptContentType(contentType)) {
+         throw new Error(i18n('installer_error_invalid_type'));
       }
 
       // Check Content-Length header to fail fast before reading huge non-script files into memory
@@ -384,7 +389,7 @@ class InstallerUI {
     * @returns {'update' | 'downgrade' | 'reinstall'}
     */
    #determineInstallAction(oldVer, newVer) {
-      const comparison = (newVer ?? '0').localeCompare(oldVer ?? '0', undefined, { numeric: true });
+      const comparison = compareSemanticVersions(oldVer, newVer);
       if (comparison > 0) return 'update';
       if (comparison < 0) return 'downgrade';
       return 'reinstall';

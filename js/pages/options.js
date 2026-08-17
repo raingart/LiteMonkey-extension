@@ -270,7 +270,11 @@ class OptionsPageController {
          });
 
          selectedScript.state = updatedState;
-         this.#scriptListManager.render(this.#scripts, this.#selectedScriptId, false);
+         this.#scriptListManager.render(
+            this.#scripts,
+            this.#selectedScriptId,
+            this.#scriptListManager.areLogsMutedGlobally
+         );
       }
 
       this.#selectedScriptId = scriptId;
@@ -599,16 +603,20 @@ class OptionsPageController {
                      storage: script.storage || {},
                      wasEnabled: script.enabled ?? true,
                      position: script.position ?? Date.now(),
+                     customUrls: script.customUrls ?? null,
+                     sourceUrl: script.sourceUrl ?? null,
                   });
                }
-            } else {
-               const { meta } = MetadataParser.parse(content);
+               } else {
+               const parsed = MetadataParser.parse(content);
+               const { meta, type } = parsed;
                if (!meta || !meta.name) {
                   throw new Error(i18n('installer_error_no_meta') || 'Invalid userscript (missing @name)');
                }
                scriptsToImport.push({
                   userCode: content,
                   meta,
+                  type,
                   wasEnabled: true,
                   position: Date.now(),
                });

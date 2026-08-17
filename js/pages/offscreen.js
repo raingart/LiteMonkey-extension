@@ -6,9 +6,10 @@
 
 import browser from '../libs/browser-support.js';
 import { MSG } from '../message-types.js';
+import { executeGmXmlHttpRequest, classifyXhrError, DEFAULT_XHR_TIMEOUT_MS } from '../libs/gm-xhr.js';
 
 const CONTEXT = 'Lite Monkey Offscreen';
-const DEFAULT_SAFETY_TIMEOUT_MS = 120000; // 2-minute fallback watchdog timeout
+const DEFAULT_SAFETY_TIMEOUT_MS = DEFAULT_XHR_TIMEOUT_MS;
 
 /** @type {Map<string, { controller: AbortController, tabId: number, timeoutId: ReturnType<typeof setTimeout> }>} Registry of active HTTP requests */
 const activeRequests = new Map(); // Enhanced structure storing tabId and watchdog timer
@@ -38,6 +39,8 @@ function failAllActiveRequests(errorMessage) {
          payload: {
             tabId: req.tabId,
             frameId: req.frameId ?? 0,
+            scriptId: req.scriptId,
+            requestId,
             eventType: 'onerror',
             response: {
                status: 0,
@@ -107,7 +110,7 @@ async function handleRequest({ requestId, scriptId, details, tabId, frameId }) {
       controller.abort();
    }, timeoutMs);
 
-   activeRequests.set(requestId, { controller, tabId, frameId: frameId ?? 0, timeoutId });
+   activeRequests.set(requestId, { controller, tabId, frameId: frameId ?? 0, timeoutId, scriptId, requestId });
 
    /**
     * Posts callback events back to the background Service Worker.
@@ -126,105 +129,11 @@ async function handleRequest({ requestId, scriptId, details, tabId, frameId }) {
    };
 
    try {
-      const method = (details.method || 'GET').toUpperCase();
-      // Respect withCredentials per GM/TM spec (defaults to same-origin to prevent CORS wildcard crashes)
-      const credentialsMode = details.anonymous
-         ? 'omit'
-         : (details.withCredentials ? 'include' : 'same-origin');
-
-      const fetchOptions = {
-         method,
-         headers: details.headers || {},
-         signal: controller.signal,
-         credentials: credentialsMode,
-      };
-
-      let requestBody = null;
-
-      // Reconstruct binary body (Uint8Array / ArrayBuffer)
-      if (details.binaryType === 'Base64' && details.binaryData) {
-         const res = await fetch(`data:application/octet-stream;base64,${details.binaryData}`);
-         requestBody = await res.arrayBuffer();
-      } else if (details.data) {
-         requestBody = details.data;
-      }
-
-      if (requestBody) {
-         // Prevent fatal TypeError by stripping body from GET/HEAD requests
-         if (method === 'GET' || method === 'HEAD') {
-            console.warn(`[${CONTEXT}] Ignoring data payload for ${method} request to prevent fetch TypeError.`);
-         } else {
-            fetchOptions.body = requestBody;
-         }
-      }
-
-      const response = await fetch(details.url, fetchOptions);
-
-      let responseDataBody = null;
-      let responseText = null;
-      let binaryResponseData = null;
-      let binaryResponseType = null;
-
-      const responseType = details.responseType || 'text';
-
-      // Binary response payloads are serialized into byte arrays for safe transport across Chrome runtime IPC channels
-      if (responseType === 'blob' || responseType === 'arraybuffer') {
-         responseDataBody = await response.arrayBuffer();
-         binaryResponseType = responseType;
-
-         // Convert ArrayBuffer to Base64 string via FileReader
-         const blob = new Blob([responseDataBody]);
-         binaryResponseData = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result); // Returns "data:application/octet-stream;base64,..."
-            reader.readAsDataURL(blob);
-         });
-      } else {
-         responseText = await response.text();
-         if (responseType === 'json') {
-            try {
-               responseDataBody = JSON.parse(responseText);
-            } catch {
-               responseDataBody = null;
-            }
-         } else {
-            responseDataBody = responseText;
-         }
-      }
-
-      const responseHeaders = {};
-      response.headers.forEach((val, key) => {
-         responseHeaders[key] = val;
-      });
-
-      const responseHeadersStr = Array.from(response.headers.entries())
-         .map(([key, value]) => `${key}: ${value}`)
-         .join('\r\n');
-
-      const respPayload = {
-         status: response.status,
-         statusText: response.statusText,
-         responseHeaders: responseHeadersStr,
-         headers: responseHeaders,
-         response: binaryResponseType ? null : responseDataBody,
-         binaryResponseData,
-         binaryResponseType,
-         responseText,
-         finalUrl: response.url,
-         readyState: 4,
-      };
-
+      const respPayload = await executeGmXmlHttpRequest(details, { signal: controller.signal });
       sendCallback('onload', respPayload);
-
    } catch (err) {
-      const isAbort = err?.name === 'AbortError';
-      const eventType = isTimeout ? 'ontimeout' : (isAbort ? 'onabort' : 'onerror');
-
-      sendCallback(eventType, {
-         status: 0,
-         statusText: isTimeout ? 'Request timed out' : (err?.message ?? 'Fetch request failed'),
-         error: err?.message ?? String(err)
-      });
+      const { eventType, response } = classifyXhrError(err, isTimeout);
+      sendCallback(eventType, response);
    } finally {
       clearTimeout(timeoutId);
       activeRequests.delete(requestId);

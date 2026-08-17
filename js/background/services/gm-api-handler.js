@@ -4,14 +4,20 @@ import { agents } from '../../database.js';
 import { ErrorCollector } from '../../libs/error-collector.js';
 import Utils from '../utils.js';
 import { logger } from '../../libs/logger.js';
+import { MAX_STORAGE_VALUE_SIZE_BYTES, MAX_STORAGE_KEYS_PER_SCRIPT } from '../../constants.js';
 import CacheManager from './cache-manager.js';
+import { executeGmXmlHttpRequest, classifyXhrError, DEFAULT_XHR_TIMEOUT_MS } from '../../libs/gm-xhr.js';
+import {
+   getSenderDocumentUrl,
+   hostnameEqualsOrIsSubdomain,
+   hostnameFromUrl,
+   isGmConnectAllowed,
+   pickCookieQueryFilters,
+} from '../../libs/origin-guard.js';
 
 const CONTEXT = 'ApiHandler';
 const OFFSCREEN_DOCUMENT_PATH = 'html/offscreen.html';
 
-// Security and performance limits
-const MAX_STORAGE_VALUE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
-const MAX_STORAGE_KEYS_PER_SCRIPT = 500;
 const NOTIFICATION_RATE_LIMIT = { COUNT: 5, SECONDS: 10 };
 
 /**
@@ -27,9 +33,8 @@ class ApiHandler {
    #tabLocks = new Map();
    #tabUrls = new Map(); // Track main-frame tab URLs to prevent false-positive SPA resets
 
-   constructor() {
-      this.initialize();
-   }
+   #initialized = false;
+   #xhrControllers = new Map();
 
    // helper to clear tokens for a specific tab
    async #clearTokensForTab(tabId) {
@@ -74,10 +79,21 @@ class ApiHandler {
       } catch (err) { }
    }
 
+   #clearNotificationCallbacksForTab(tabId) {
+      for (const [id, context] of this.#notificationCallbacks) {
+         if (context?.tabId === tabId) {
+            this.#notificationCallbacks.delete(id);
+         }
+      }
+   }
+
    /**
     * Attaches global browser extension event listeners.
     */
    initialize() {
+      if (this.#initialized) return;
+      this.#initialized = true;
+
       browser?.notifications?.onClicked?.addListener((id) =>
          this.#sendNotificationEvent(id, MSG.EVENT_NOTIFICATION_CLICKED)
       );
@@ -88,17 +104,21 @@ class ApiHandler {
       });
 
       browser?.tabs?.onRemoved?.addListener((tabId) => {
-         this.#tabUrls.delete(tabId); // Clean up tracked tab URL on tab close
-         this.handleTabRemoved(tabId);
+            this.#tabUrls.delete(tabId); // Clean up tracked tab URL on tab close
+            this.#clearNotificationCallbacksForTab(tabId);
+            this.handleTabRemoved(tabId);
       });
 
-      // Only clear menu commands on real top-level main frame navigation (changeInfo.url present)
+      // Full document loads send status=loading + url. History API / SPA sends url without loading.
       browser?.tabs?.onUpdated?.addListener((tabId, changeInfo) => {
          if (changeInfo.status === 'loading' && changeInfo.url) {
             this.#tabUrls.set(tabId, changeInfo.url);
             browser?.storage?.session?.remove(`menu_cmds_${tabId}`).catch(() => { });
-            this.#clearTokensForTab(tabId); // Prevent token memory leak on page reloads/SPA navigation
+            this.#clearTokensForTab(tabId);
             this.#clearUnstableFlagsForTab(tabId);
+         } else if (changeInfo.url && changeInfo.status !== 'loading') {
+            this.#tabUrls.set(tabId, changeInfo.url);
+            browser.tabs.sendMessage(tabId, { type: MSG.EVENT_REEVALUATE_TAB_SCRIPTS }).catch(() => { });
          }
       });
 
@@ -134,17 +154,7 @@ class ApiHandler {
          return { allowed: true };
       }
 
-      const connectRules = [].concat(script.meta?.connect || []);
-
-      // Extract current page origin hostname from sender tab
-      let documentHost = null;
-      if (sender?.tab?.url) {
-         try {
-            documentHost = new URL(sender.tab.url).hostname;
-         } catch {
-            // Ignore malformed sender tab URL
-         }
-      }
+      const documentHost = hostnameFromUrl(getSenderDocumentUrl(sender));
 
       let targetHost = null;
       try {
@@ -153,44 +163,15 @@ class ApiHandler {
          return { allowed: false, error: 'Invalid target URL.' };
       }
 
-      const isAllowed = connectRules.some((rule) => {
-         if (rule === '*') return true;
-
-         // Support '@connect self' directive matching origin page host
-         if (rule === 'self' && documentHost) {
-            return targetHost === documentHost || targetHost.endsWith('.' + documentHost);
-         }
-
-         // Clean rule domain from protocol and path prefixes
-         let ruleDomain = rule;
-         if (rule.includes('://')) {
-            try {
-               ruleDomain = new URL(rule).hostname;
-            } catch {
-               ruleDomain = rule.split('://')[1].split('/')[0];
-            }
-         }
-         ruleDomain = ruleDomain.split(':')[0].split('/')[0].trim();
-
-         if (ruleDomain.startsWith('*.')) {
-            const baseDomain = ruleDomain.substring(2);
-            return targetHost === baseDomain || targetHost.endsWith('.' + baseDomain);
-         }
-
-         // Greasemonkey/Tampermonkey spec: domain "domain.com" allows domain.com and *.domain.com
-         return targetHost === ruleDomain || targetHost.endsWith('.' + ruleDomain);
-      });
-
-      // Same-origin fallback: grant access without explicit @connect if requesting the page's own domain
-      if (!isAllowed && documentHost) {
-         if (targetHost === documentHost || targetHost.endsWith('.' + documentHost)) {
-            return { allowed: true };
-         }
+      if (isGmConnectAllowed(targetHost, documentHost, script.meta?.connect)) {
+         return { allowed: true };
       }
 
-      return isAllowed
-         ? { allowed: true }
-         : { allowed: false, error: `The URL "${url}" is not included in the script's @connect domains.` };
+      return { allowed: false, error: `The URL "${url}" is not included in the script's @connect domains.` };
+   }
+
+   #hasOffscreen() {
+      return typeof browser.offscreen?.createDocument === 'function';
    }
 
    /**
@@ -200,6 +181,10 @@ class ApiHandler {
     * @returns {Promise<void>}
     */
    #getOffscreenDocument() {
+      if (!this.#hasOffscreen()) {
+         return Promise.resolve();
+      }
+
       if (!this.#offscreenDocumentPromise) {
          this.#offscreenDocumentPromise = (async () => {
             try {
@@ -236,14 +221,94 @@ class ApiHandler {
       return this.#offscreenDocumentPromise;
    }
 
+   #sendXhrCallback(tabId, frameId, scriptId, requestId, eventType, response) {
+      if (!tabId) return;
+      browser.tabs.sendMessage(tabId, {
+         type: MSG.GM_XMLHTTPREQUEST_CALLBACK,
+         payload: { scriptId, requestId, eventType, response },
+      }, { frameId: frameId ?? 0 }).catch(() => { });
+   }
+
    /**
-    * Proxies a message payload to the offscreen document with dynamic re-creation if evicted by Chrome.
+    * Firefox / no-offscreen path: run GM_xmlhttpRequest in the service worker via fetch.
     * @private
-    * @param {string} type - Message type identifier.
-    * @param {Object} payload - Data object.
-    * @returns {Promise<Object>} Response from offscreen handler.
     */
-   async #proxyToOffscreen(type, payload) {
+   async #handleXhrInWorker({ requestId, scriptId, details, tabId, frameId }) {
+      const controller = new AbortController();
+      let isTimeout = false;
+      const timeoutMs = details?.timeout > 0 ? details.timeout : DEFAULT_XHR_TIMEOUT_MS;
+      const timeoutId = setTimeout(() => {
+         isTimeout = true;
+         controller.abort();
+      }, timeoutMs);
+
+      this.#xhrControllers.set(requestId, controller);
+
+      try {
+         const respPayload = await executeGmXmlHttpRequest(details, { signal: controller.signal });
+         this.#sendXhrCallback(tabId, frameId, scriptId, requestId, 'onload', respPayload);
+         return { success: true };
+      } catch (err) {
+         const { eventType, response } = classifyXhrError(err, isTimeout);
+         this.#sendXhrCallback(tabId, frameId, scriptId, requestId, eventType, response);
+         return { success: false, error: response.error };
+      } finally {
+         clearTimeout(timeoutId);
+         this.#xhrControllers.delete(requestId);
+      }
+   }
+
+   async #setClipboardWithoutOffscreen(details, sender) {
+      const text = String(details?.text ?? '');
+      try {
+         if (globalThis.navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return { success: true };
+         }
+      } catch {
+         // Fall through to in-tab injection
+      }
+
+      if (sender?.tab?.id && browser.scripting?.executeScript) {
+         try {
+            await browser.scripting.executeScript({
+               target: { tabId: sender.tab.id, frameIds: sender.frameId != null ? [sender.frameId] : undefined },
+               func: async (value) => {
+                  await navigator.clipboard.writeText(value);
+               },
+               args: [text],
+            });
+            return { success: true };
+         } catch (err) {
+            return { success: false, error: err?.message ?? String(err) };
+         }
+      }
+
+      return { success: false, error: 'Clipboard API is unavailable in this browser.' };
+   }
+
+   /**
+    * Proxies GM_xmlhttpRequest / clipboard work to the offscreen document, or runs it
+    * in the service worker when offscreen is unavailable (Firefox).
+    * @private
+    */
+   async #proxyToOffscreen(type, payload, sender) {
+      if (!this.#hasOffscreen()) {
+         if (type === MSG.GM_XMLHTTPREQUEST) {
+            this.#handleXhrInWorker(payload);
+            return { success: true };
+         }
+         if (type === MSG.GM_XMLHTTPREQUEST_ABORT) {
+            this.#xhrControllers.get(payload.requestId)?.abort();
+            this.#xhrControllers.delete(payload.requestId);
+            return { success: true };
+         }
+         if (type === MSG.GM_SET_CLIPBOARD) {
+            return this.#setClipboardWithoutOffscreen(payload, sender);
+         }
+         return { success: false, error: 'Offscreen documents are not supported in this browser.' };
+      }
+
       const currentPromise = this.#offscreenDocumentPromise;
       await this.#getOffscreenDocument();
 
@@ -291,7 +356,7 @@ class ApiHandler {
       if (!(await this.#hasPermission('cookies'))) {
          return { success: false, error: 'Missing "cookies" permission.' };
       }
-      if (!sender?.tab?.url) {
+      if (!getSenderDocumentUrl(sender)) {
          return { success: false, error: 'Cannot determine the origin URL for the operation.' };
       }
       return null;
@@ -320,10 +385,6 @@ class ApiHandler {
 
          if ((hasOnClick || hasOnDone) && sender.tab?.id) {
             this.#notificationCallbacks.set(notificationId, { tabId: sender.tab.id });
-
-            setTimeout(() => {
-               this.#notificationCallbacks.delete(notificationId);
-            }, 30000);
          }
       } catch (err) {
          logger.error(CONTEXT, `Failed to create notification ${notificationId}:`, err.message);
@@ -614,18 +675,22 @@ class ApiHandler {
 
    // Helper to validate that requested cookie domains/URLs match the executing page's origin
    #validateCookieOrigin(pageUrlStr, targetUrlStr, targetDomain) {
-      const pageUrl = new URL(pageUrlStr);
+      const pageHost = hostnameFromUrl(pageUrlStr);
+      if (!pageHost) {
+         return 'Security Error: Cannot determine the page origin for cookie access.';
+      }
       if (targetUrlStr) {
-         const targetUrl = new URL(targetUrlStr);
-         // Verify page origin is equal to or a subdomain of target host (parent domain access)
-         if (!pageUrl.hostname.endsWith(targetUrl.hostname) && pageUrl.hostname !== targetUrl.hostname) {
+         const targetHost = hostnameFromUrl(targetUrlStr);
+         if (!targetHost) {
+            return `Security Error: Invalid cookie URL: ${targetUrlStr}`;
+         }
+         if (!hostnameEqualsOrIsSubdomain(pageHost, targetHost)) {
             return `Security Error: Cannot access cookies for cross-origin URL: ${targetUrlStr}`;
          }
       }
       if (targetDomain) {
-         const cleanDomain = targetDomain.startsWith('.') ? targetDomain.substring(1) : targetDomain;
-         // Verify page origin is equal to or a subdomain of requested cookie domain
-         if (!pageUrl.hostname.endsWith(cleanDomain) && pageUrl.hostname !== cleanDomain) {
+         const cleanDomain = String(targetDomain).replace(/^\./, '');
+         if (!hostnameEqualsOrIsSubdomain(pageHost, cleanDomain)) {
             return `Security Error: Cannot access cookies for cross-origin domain: ${targetDomain}`;
          }
       }
@@ -637,12 +702,14 @@ class ApiHandler {
       if (precheckError) return precheckError;
 
       try {
-         const frameUrl = sender.url || sender.tab.url;
-         // Enforce Same-Origin Policy for cookie reading
-         const originError = this.#validateCookieOrigin(frameUrl, details.url, details.domain);
+         const frameUrl = getSenderDocumentUrl(sender);
+         const originError = this.#validateCookieOrigin(frameUrl, details?.url, details?.domain);
          if (originError) return { success: false, error: originError };
 
-         const query = { url: frameUrl, ...details };
+         const query = {
+            url: details?.url || frameUrl,
+            ...pickCookieQueryFilters(details),
+         };
          if (sender.tab?.cookieStoreId) {
             query.storeId = sender.tab.cookieStoreId;
          }
@@ -661,22 +728,24 @@ class ApiHandler {
       if (!details?.name) return { success: false, error: 'GM_cookie "set" requires a "name" property.' };
 
       try {
-         const frameUrl = sender.url || sender.tab.url;
-         const pageUrl = new URL(frameUrl);
+         const frameUrl = getSenderDocumentUrl(sender);
+         const pageHost = hostnameFromUrl(frameUrl);
          const { name, value, path, secure, httpOnly, sameSite, expirationDate } = details;
 
-         // Validate requested domain matches current page origin or valid parent domain
+         const originError = this.#validateCookieOrigin(frameUrl, details.url, details.domain);
+         if (originError) return { success: false, error: originError };
+
          let cookieDomain = details.domain;
          if (cookieDomain) {
-            cookieDomain = cookieDomain.startsWith('.') ? cookieDomain.substring(1) : cookieDomain;
-            if (!pageUrl.hostname.endsWith(cookieDomain) && pageUrl.hostname !== cookieDomain) {
-               return { success: false, error: `Cannot set cookie for domain "${cookieDomain}" from "${pageUrl.hostname}".` };
+            cookieDomain = String(cookieDomain).replace(/^\./, '');
+            if (!hostnameEqualsOrIsSubdomain(pageHost, cookieDomain)) {
+               return { success: false, error: `Cannot set cookie for domain "${cookieDomain}" from "${pageHost}".` };
             }
          }
 
          // Explicit whitelist preventing parameter overrides via rest spread
          const cookieToSet = {
-            url: frameUrl,
+            url: details.url || frameUrl,
             name: String(name),
             value: String(value ?? ''),
             ...(cookieDomain && { domain: cookieDomain }),
@@ -706,18 +775,18 @@ class ApiHandler {
       if (!name) return { success: false, error: 'GM_cookie "delete" requires a "name" property.' };
 
       try {
-         const frameUrl = sender.url || sender.tab.url;
+         const frameUrl = getSenderDocumentUrl(sender);
 
-         // Enforce Same-Origin Policy for cookie deletion
          const originError = this.#validateCookieOrigin(frameUrl, details.url, details.domain);
          if (originError) return { success: false, error: originError };
 
-         const targetStoreId = sender.tab?.cookieStoreId || details.storeId;
+         const targetStoreId = sender.tab?.cookieStoreId;
+         const filters = pickCookieQueryFilters(details);
 
          const query = {
             name,
             url: details.url || frameUrl,
-            ...(details.path && { path: details.path }),
+            ...(filters.path && { path: filters.path }),
             ...(targetStoreId && { storeId: targetStoreId }),
          };
 
@@ -779,11 +848,11 @@ class ApiHandler {
     * @param {Object} details - Request details containing target clipboard text.
     * @returns {Promise<Object>}
     */
-   async handleSetClipboard(details) {
+   async handleSetClipboard(details, sender) {
       if (!(await this.#hasPermission('clipboardWrite'))) {
          return { success: false, error: 'Missing "clipboardWrite" permission.' };
       }
-      return this.#proxyToOffscreen(MSG.GM_SET_CLIPBOARD, details);
+      return this.#proxyToOffscreen(MSG.GM_SET_CLIPBOARD, details, sender);
    }
 
    /**
@@ -859,7 +928,11 @@ class ApiHandler {
 
    async handleOpenInTab({ url, active, insert }, sender) {
       try {
-         const options = { url, active };
+         const parsed = new URL(url);
+         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return { success: false, error: 'GM_openInTab only allows http(s) URLs.' };
+         }
+         const options = { url: parsed.href, active };
          if (insert && sender?.tab?.index !== undefined) {
             options.index = sender.tab.index + 1;
          }

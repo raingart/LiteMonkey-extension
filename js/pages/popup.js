@@ -4,6 +4,7 @@ import { i18n } from '../libs/localization.js';
 import { escapeHTML, sanitizeSafeUrl } from '../ui/utils/dom-utils.js';
 import { sendMessageWithRetry } from '../libs/message-service.js';
 import { isRestrictedUrl } from '../constants.js';
+import { excludeRuleAppliesToHostname, formatSiteExcludeRule, normalizeCustomUrlsExcludes } from '../libs/origin-guard.js';
 
 /** @type {Array<{name: string, shortName: string, searchUrlTemplate: string, isPrimary: boolean, flow?: string}>} */
 const SCRIPT_SOURCES = [
@@ -129,21 +130,22 @@ class PopupUI {
          if (this.#activeTab?.id) {
             try {
                if (browser.storage?.session) {
-                  sessionData = (await browser.storage.session.get(null)) || {};
+                  const tabLogsKey = `tab_logs_${this.#activeTab.id}`;
+                  const unstableKeys = scripts.map((script) => `unstable_${this.#activeTab.id}_${script.id}`);
+                  sessionData = (await browser.storage.session.get([tabLogsKey, ...unstableKeys])) || {};
                }
             } catch (storageError) {
                console.warn('[Popup] Session storage access failed, diagnostics disabled:', storageError);
             }
 
-            scripts.forEach((script) => {
-            const unstableKey = `unstable_${this.#activeTab.id}_${script.id}`;
             const tabLogsKey = `tab_logs_${this.#activeTab.id}`;
             const tabLogs = sessionData[tabLogsKey] || {};
 
-            script.isUnstable = !!sessionData[unstableKey];
-            // Read current log count per script for active tab
-            script.logCount = tabLogs[script.id]?.length || 0;
-         });
+            scripts.forEach((script) => {
+               const unstableKey = `unstable_${this.#activeTab.id}_${script.id}`;
+               script.isUnstable = !!sessionData[unstableKey];
+               script.logCount = tabLogs[script.id]?.length || 0;
+            });
 
             //    scripts.sort((a, b) => {
             //       const aEnabled = a.config?.enabled ?? false;
@@ -156,10 +158,7 @@ class PopupUI {
          }
 
          this.#scripts = scripts;
-         if (this.#elements.pauseSwitch) {
-            this.#elements.pauseSwitch.checked = !isPaused;
-         }
-         this.#elements.list?.classList.toggle('is-paused', isPaused);
+         this.#applyPauseUi(isPaused);
          this.#render(scripts);
       } catch (error) {
          console.error('[Popup] Initialization failed:', error);
@@ -225,8 +224,8 @@ class PopupUI {
       const sortedScripts = [...scripts].sort((a, b) => {
          const aCustom = a.customUrls ? a.customUrls.split('\n').map((s) => s.trim()).filter(Boolean) : [];
          const bCustom = b.customUrls ? b.customUrls.split('\n').map((s) => s.trim()).filter(Boolean) : [];
-         const aExcluded = activeDomain ? aCustom.some((l) => l.startsWith('-') && l.includes(activeDomain)) : false;
-         const bExcluded = activeDomain ? bCustom.some((l) => l.startsWith('-') && l.includes(activeDomain)) : false;
+         const aExcluded = activeDomain ? aCustom.some((l) => excludeRuleAppliesToHostname(l, activeDomain)) : false;
+         const bExcluded = activeDomain ? bCustom.some((l) => excludeRuleAppliesToHostname(l, activeDomain)) : false;
 
          const aActive = (a.enabled ?? false) && !aExcluded;
          const bActive = (b.enabled ?? false) && !bExcluded;
@@ -277,15 +276,28 @@ class PopupUI {
       const hasHomepage = safeHomepage && safeHomepage !== '#';
 
       const homepageHtml = hasHomepage
-         ? `<a href="${escapeHTML(safeHomepage)}" target="_blank" rel="noopener noreferrer" class="script-homepage-link" tooltip="${escapeHTML(i18n('popup_open_homepage') || 'Open homepage')}" flow="right">
+         ? `<a href="${safeHomepage}" target="_blank" rel="noopener noreferrer" class="script-homepage-link" tooltip="${escapeHTML(i18n('popup_open_homepage') || 'Open homepage')}" flow="right">
                <svg width="14" height="14" aria-hidden="true"><use xlink:href="#iconLink"></use></svg>
             </a>`
          : '';
 
-      const iconHtml = isUnstable
-         ? `<span class="script-warning-badge" title="${escapeHTML(
-            i18n('popup_script_flooding_errors_tooltip')
-         )}">⚠️</span>`
+      const isDisabledByPermissions = !enabled && (state.permissionError ?? false);
+      const registrationError = state.registrationError;
+      const hasAnomalies = Array.isArray(state.anomalies) && state.anomalies.length > 0;
+      const tooltip = escapeHTML(
+         isUnstable
+            ? i18n('popup_unstable_script_warning')
+            : registrationError
+               ? registrationError
+               : isDisabledByPermissions
+                  ? i18n('popup_needs_permissions_tooltip')
+                  : hasAnomalies
+                     ? (state.anomalies || []).join('\n')
+                     : rawName
+      );
+
+      const iconHtml = isUnstable || registrationError || hasAnomalies
+         ? `<span class="script-warning-badge" title="${tooltip}">⚠️</span>`
          : iconDataUrl
             ? `<img src="${iconDataUrl}" alt="icon" class="script-icon">`
             : type === 'userstyle'
@@ -301,15 +313,6 @@ class PopupUI {
             .join('')}</ul>`
          : '';
 
-      const isDisabledByPermissions = !enabled && (state.permissionError ?? false);
-      const tooltip = escapeHTML(
-         isUnstable
-            ? i18n('popup_unstable_script_warning')
-            : isDisabledByPermissions
-               ? i18n('popup_needs_permissions_tooltip')
-               : rawName
-      );
-
       const currentUrl = this.#activeTab?.url || '';
       let activeDomain = '';
       try {
@@ -320,7 +323,7 @@ class PopupUI {
 
       const customLines = script.customUrls ? script.customUrls.split('\n').map((s) => s.trim()).filter(Boolean) : [];
       const isExcludedOnSite = activeDomain
-         ? customLines.some((l) => l.startsWith('-') && l.includes(activeDomain))
+         ? customLines.some((l) => excludeRuleAppliesToHostname(l, activeDomain))
          : false;
 
       const rawExcludeTooltip = isExcludedOnSite
@@ -390,13 +393,17 @@ class PopupUI {
       const { findScriptsContainer: container } = this.#elements;
       if (!container) return;
 
-      if (!url) {
+      if (!url || isRestrictedUrl(url)) {
          container.classList.add('hide');
          return;
       }
 
       try {
          const domain = new URL(url).hostname;
+         if (!domain) {
+            container.classList.add('hide');
+            return;
+         }
          const [primary, ...others] = [...SCRIPT_SOURCES].sort(
             (a, b) => (b.isPrimary ?? false) - (a.isPrimary ?? false)
          );
@@ -438,9 +445,24 @@ class PopupUI {
    #handlePauseToggle = async ({ target }) => {
       const isPaused = !target.checked;
       await sendMessageWithRetry({ type: MSG.SET_PAUSE_STATE, payload: { isPaused } });
-      this.#elements.list?.classList.toggle('is-paused', isPaused);
+      this.#applyPauseUi(isPaused);
       this.#showRefreshPrompt();
    };
+
+   /**
+    * Syncs pause switch, dimmed list, and pause/resume tooltip with the current pause flag.
+    * @private
+    * @param {boolean} isPaused
+    */
+   #applyPauseUi(isPaused) {
+      if (this.#elements.pauseSwitch) {
+         this.#elements.pauseSwitch.checked = !isPaused;
+      }
+      this.#elements.list?.classList.toggle('is-paused', isPaused);
+      const label = i18n(isPaused ? 'popup_btn_resume_all' : 'popup_btn_pause_all');
+      this.#elements.pauseSwitch?.setAttribute('aria-label', label);
+      this.#elements.pauseSwitch?.closest('.pause-wrapper')?.setAttribute('tooltip', label);
+   }
 
    /**
     * Reloads the current active tab.
@@ -486,15 +508,15 @@ class PopupUI {
          const script = this.#scripts.find((s) => s.id === scriptId);
          if (!script) return;
 
-         const currentCustom = (script.customUrls || '').trim();
+         const currentCustom = normalizeCustomUrlsExcludes((script.customUrls || '').trim()) || '';
          const lines = currentCustom ? currentCustom.split('\n').map((s) => s.trim()).filter(Boolean) : [];
-         const isExcluded = lines.some((l) => l.startsWith('-') && l.includes(domain));
+         const isExcluded = lines.some((l) => excludeRuleAppliesToHostname(l, domain));
 
          let newLines;
          if (isExcluded) {
-            newLines = lines.filter((l) => !(l.startsWith('-') && l.includes(domain)));
+            newLines = lines.filter((l) => !excludeRuleAppliesToHostname(l, domain));
          } else {
-            newLines = [...lines, `-*://${domain}/*`];
+            newLines = [...lines, formatSiteExcludeRule(domain)];
          }
 
          const newCustomUrls = newLines.length > 0 ? newLines.join('\n') : null;
@@ -559,6 +581,7 @@ class PopupUI {
                      const script = this.#scripts.find(s => s.id === scriptId);
                      if (script) script.enabled = true;
                      this.#showRefreshPrompt();
+                     this.#render(this.#scripts);
                   } else {
                      throw new Error(finalResponse?.error || 'Failed to enable script.');
                   }
@@ -575,6 +598,7 @@ class PopupUI {
             const script = this.#scripts.find(s => s.id === scriptId);
             if (script) script.enabled = isEnabled;
             this.#showRefreshPrompt();
+            this.#render(this.#scripts);
          } else {
             throw new Error(response?.error ?? 'Unknown error');
          }
@@ -655,6 +679,12 @@ class PopupUI {
       if (muteLogsBtn) muteLogsBtn.disabled = false;
 
       closeLogsModal?.addEventListener('click', this.#closeLogsModal, { signal });
+      this.#elements.logsModal?.addEventListener('click', (event) => {
+         if (event.target === this.#elements.logsModal) this.#closeLogsModal();
+      }, { signal });
+      document.addEventListener('keydown', (event) => {
+         if (event.key === 'Escape') this.#closeLogsModal();
+      }, { signal });
       copyLogsBtn?.addEventListener('click', this.#copyLogsToClipboard, { signal });
       clearLogsBtn?.addEventListener('click', () => this.#clearLogsForScript(scriptId), { signal });
 
@@ -737,10 +767,16 @@ class PopupUI {
     */
    #clearLogsForScript = async (scriptId) => {
       try {
-         await sendMessageWithRetry({ type: MSG.CLEAR_LOGS_FOR_SCRIPT_IN_TAB, payload: { scriptId } });
+         await sendMessageWithRetry({
+            type: MSG.CLEAR_LOGS_FOR_SCRIPT_IN_TAB,
+            payload: { scriptId, tabId: this.#activeTab?.id },
+         });
          if (this.#elements.logsContent) {
             this.#elements.logsContent.innerHTML = `<p>${i18n('popup_logs_cleared')}</p>`;
          }
+         const script = this.#scripts.find((s) => s.id === scriptId);
+         if (script) script.logCount = 0;
+         this.#render(this.#scripts);
       } catch (err) {
          console.error('Failed to clear logs:', err);
       }

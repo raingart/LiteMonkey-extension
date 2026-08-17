@@ -9,8 +9,8 @@ import browser from './libs/browser-support.js';
 export const manifest = browser?.runtime?.getManifest?.() ?? {};
 
 export const DEFAULT_ICON_URL = browser?.runtime?.getURL?.(
-   manifest?.icons?.[48] ?? 'icons/icon48.png'
-) ?? 'icons/icon48.png';
+   manifest?.icons?.[48] ?? 'icons/48.png'
+) ?? 'icons/48.png';
 
 export const BOOTSTRAP_SCRIPT_ID = 'lite-monkey-bootstrap';
 
@@ -19,6 +19,12 @@ export const BOOTSTRAP_SCRIPT_ID = 'lite-monkey-bootstrap';
  * @type {number}
  */
 export const MAX_SCRIPT_SIZE = 5 * 1024 * 1024;
+
+/** Max JSON-encoded size of a single GM storage value. */
+export const MAX_STORAGE_VALUE_SIZE_BYTES = 2 * 1024 * 1024;
+
+/** Max GM storage keys per script. */
+export const MAX_STORAGE_KEYS_PER_SCRIPT = 500;
 
 /**
  * Centralized set of domain hostnames trusted for userscript installations.
@@ -101,4 +107,49 @@ export function toNumericId(id) {
       return Number(id);
    }
    return id;
+}
+
+/**
+ * Media types accepted for userscript / @require / update downloads.
+ * Exact match on the type/subtype (charset ignored). Do not use a `text/` prefix —
+ * that would accept `text/html`.
+ * @type {readonly string[]}
+ */
+export const ALLOWED_SCRIPT_MEDIA_TYPES = Object.freeze([
+   'text/javascript',
+   'text/ecmascript',
+   'application/javascript',
+   'application/x-javascript',
+   'text/plain',
+]);
+
+/**
+ * @param {string} [contentType]
+ * @returns {string} Lowercased type/subtype without parameters.
+ */
+export function parseMediaType(contentType) {
+   return String(contentType || '').split(';')[0].trim().toLowerCase();
+}
+
+/**
+ * @param {string} [contentType]
+ * @returns {boolean}
+ */
+export function isAllowedScriptContentType(contentType) {
+   return ALLOWED_SCRIPT_MEDIA_TYPES.includes(parseMediaType(contentType));
+}
+
+/**
+ * @param {string} [contentType]
+ * @param {string[]} [allowedTypes=[]] Prefixes (ending `/`) or exact media types.
+ * @returns {boolean}
+ */
+export function contentTypeMatchesAllowed(contentType, allowedTypes = []) {
+   if (!allowedTypes.length) return true;
+   const mediaType = parseMediaType(contentType);
+   if (!mediaType) return false;
+   return allowedTypes.some((type) => {
+      const allowed = String(type).toLowerCase();
+      return allowed.endsWith('/') ? mediaType.startsWith(allowed) : mediaType === allowed;
+   });
 }

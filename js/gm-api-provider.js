@@ -3,6 +3,8 @@
  * @description Provides the execution context and GM_* / GM.* APIs injected into main-world web pages.
  */
 
+import { getGrantedApiNames } from './gm-grants.js';
+
 // WARNING: apiProvider is stringified via apiProvider.toString() and evaluated directly in the target web page context.
 // Do NOT add references to external scope variables or imports inside apiProvider.
 const apiProvider = function (context) {
@@ -37,6 +39,7 @@ const apiProvider = function (context) {
       storageCache,   // Initial snapshot for synchronous GM_getValue calls.
 
       resourceCache = {}, // Extract resource cache
+      allowedApis,        // Allow-list of GM_* / GM4 names from @grant (empty = expose nothing extra)
    } = context;
 
    // --- State Management ---
@@ -362,6 +365,9 @@ const apiProvider = function (context) {
 
                   requestFromBackground(MSG.GM_SET_VALUE, { scriptId, key, value: valToSend })
                      .then((res) => {
+                        if (!res?.success) {
+                           throw new Error(res?.error || 'GM_setValue failed');
+                        }
                         resolvers.forEach((r) => r(res));
                      })
                      .catch((err) => {
@@ -471,23 +477,32 @@ const apiProvider = function (context) {
 
             let requestData = details.data;
 
+            const safeKeys = nativeObjectKeys(details);
+            for (const key of safeKeys) {
+               const value = details[key];
+               if (typeof value !== 'function' && key !== 'data') {
+                  cleanDetails[key] = value;
+               }
+            }
+
             // Serialize FormData into a multipart Blob with boundary to survive IPC transport
             if (requestData instanceof FormData) {
                try {
                   const res = new Response(requestData);
                   requestData = await res.blob();
-                  cleanDetails.headers = cleanDetails.headers || {};
-                  // Extract the generated boundary from the Response Content-Type
-                  cleanDetails.headers['Content-Type'] = res.headers.get('Content-Type');
+                  const headers = { ...(cleanDetails.headers || {}) };
+                  headers['Content-Type'] = res.headers.get('Content-Type');
+                  cleanDetails.headers = headers;
                } catch (e) {
                   originalConsole.error('Failed to serialize FormData:', e);
                }
             } else if (requestData instanceof URLSearchParams) {
                requestData = requestData.toString();
-               cleanDetails.headers = cleanDetails.headers || {};
-               if (!cleanDetails.headers['Content-Type']) {
-                  cleanDetails.headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=utf-8';
+               const headers = { ...(cleanDetails.headers || {}) };
+               if (!headers['Content-Type'] && !headers['content-type']) {
+                  headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=utf-8';
                }
+               cleanDetails.headers = headers;
             }
 
             if (requestData) {
@@ -501,14 +516,6 @@ const apiProvider = function (context) {
                   binaryType = 'Base64';
                } else {
                   cleanDetails.data = requestData;
-               }
-            }
-
-            const safeKeys = nativeObjectKeys(details);
-            for (const key of safeKeys) {
-               const value = details[key];
-               if (typeof value !== 'function' && key !== 'data') {
-                  cleanDetails[key] = value;
                }
             }
 
@@ -544,19 +551,8 @@ const apiProvider = function (context) {
 
          return {
             abort: () => {
-               const callbacks = activeXmlHttpRequests.get(requestId);
-               if (callbacks) {
-                  // Do NOT delete the request from activeXmlHttpRequests immediately.
-                  // Let the background script send the 'onabort' callback back, which will then
-                  // correctly trigger onreadystatechange(4) according to the XHR spec.
-                  if (typeof callbacks.onabort === 'function') {
-                     try {
-                        callbacks.onabort({ status: 0, statusText: 'Aborted by script', finalUrl: details.url, readyState: 4 });
-                     } catch (err) {
-                        originalConsole.error('Error in GM_xmlhttpRequest onabort callback:', err);
-                     }
-                  }
-               }
+               if (!activeXmlHttpRequests.has(requestId)) return;
+               // Do not invoke onabort locally. Background delivers onabort + readyState 4.
                postToBridge({ type: MSG.GM_XMLHTTPREQUEST_ABORT, payload: { requestId, scriptId } });
             }
          };
@@ -859,6 +855,13 @@ const apiProvider = function (context) {
    };
 
    Object.assign(gmAPI, gm4Mapping);
+
+   // Fail closed: only expose APIs listed in the background-computed @grant allow-list
+   const allow = new Set(Array.isArray(allowedApis) ? allowedApis : []);
+   for (const key of nativeObjectKeys(gmAPI)) {
+      if (!allow.has(key)) delete gmAPI[key];
+   }
+
    return gmAPI;
 };
 
@@ -873,12 +876,13 @@ export function generateGmApiCode({ meta }) {
    const grantList = [].concat(meta?.grant || []).filter(Boolean);
    const grants = new Set(grantList.length ? grantList : ['none']);
 
-   if (grants.has('none')) return { apiProviderCode: '() => ({})', grants: [] };
+   if (grants.has('none')) return { apiProviderCode: '() => ({})', grants: [], allowedApis: [] };
 
    grants.add('GM_info').add('unsafeWindow');
 
    return {
       apiProviderCode: apiProvider.toString(),
       grants: [...grants],
+      allowedApis: [...getGrantedApiNames(grantList)],
    };
 }

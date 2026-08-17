@@ -4,6 +4,9 @@
  * metadata blocks. Extracts metadata directives such as `@match`, `@grant`, `@resource`, and `@var`.
  */
 
+/** Max offset from file start where a metadata header may begin (skips HTML wrappers). */
+export const META_HEADER_SEARCH_LIMIT = 32 * 1024;
+
 // Explicit list of multi-value directives that legitimately produce arrays
 const MULTI_VALUE_DIRECTIVES = new Set([
    'match',
@@ -70,12 +73,15 @@ export const MetadataParser = {
          userstyle: { prefix: '/* ==UserStyle==', suffix: '==/UserStyle== */' },
       };
 
+      const searchWindow = str.length > META_HEADER_SEARCH_LIMIT
+         ? str.slice(0, META_HEADER_SEARCH_LIMIT)
+         : str;
+
       for (const [type, { prefix, suffix }] of Object.entries(markers)) {
-         // Locate metadata header prefix anywhere near file start instead of requiring strict startsWith
-         const startIndex = str.indexOf(prefix);
+         // Header must start near the beginning of the file, not anywhere in an HTML wrapper
+         const startIndex = searchWindow.indexOf(prefix);
          if (startIndex !== -1) {
             const subStr = str.substring(startIndex);
-            // Destructure and return metaBlockStr
             const { meta, metaBlockStr } = this.process({ str: subStr, suffix });
             return { meta, type, metaBlockStr };
          }

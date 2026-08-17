@@ -118,8 +118,12 @@ export class SettingsManager {
     * @param {boolean} isDirty
     */
    #setDirty(isDirty) {
-      this.#isDirty = isDirty;
       this.#saveBtn.classList.toggle('unsaved', isDirty);
+      this.#isDirty = isDirty;
+   }
+
+   get isDirty() {
+      return this.#isDirty;
    }
 
    /**

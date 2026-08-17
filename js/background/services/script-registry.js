@@ -7,6 +7,7 @@ import ApiHandler from './gm-api-handler.js';
 import Utils from '../utils.js';
 import { logger } from '../../libs/logger.js';
 import { TRUSTED_SCRIPT_HOSTS, MAX_SCRIPT_SIZE, isRestrictedUrl, isTrustedScriptHost } from '../../constants.js';
+import { normalizeCustomUrlsExcludes } from '../../libs/origin-guard.js';
 
 const CONTEXT = 'ScriptRegistry';
 
@@ -131,6 +132,8 @@ const ScriptRegistry = {
 
       if (!script.state) script.state = {};
 
+      this._inferUserstyleMetadata(script);
+
       // Validate required resources (@require, @resource) if enabled and error-free
       if (script.enabled) {
          script.state.registrationError = null;
@@ -174,7 +177,7 @@ const ScriptRegistry = {
       const baseTimestamp = Date.now();
 
       const preparedScripts = await Promise.all(
-         scripts.map(async ({ userCode = '', position, config, wasEnabled, meta, customUrls, storage }, index) => {
+         scripts.map(async ({ userCode = '', position, config, wasEnabled, meta, customUrls, storage, type, sourceUrl }, index) => {
             validateScriptSize(userCode);
 
             const key = `${meta?.name || ''}|${meta?.namespace || ''}`;
@@ -193,9 +196,13 @@ const ScriptRegistry = {
                position: position ?? existing?.position ?? (baseTimestamp + index),
                config: config || existing?.config,
                meta,
-               customUrls,
+               type,
+               customUrls: customUrls !== undefined ? customUrls : (existing?.customUrls ?? null),
+               sourceUrl: sourceUrl !== undefined ? sourceUrl : (existing?.sourceUrl ?? null),
                storage: storage || {} // Attach storage object to prepared script
             };
+
+            this._inferUserstyleMetadata(scriptObject);
 
             const permResult = await Utils.handlePermissionCheck(scriptObject);
 
@@ -257,6 +264,8 @@ const ScriptRegistry = {
          state: {},
          sourceUrl,
       };
+
+      this._inferUserstyleMetadata(scriptObject);
 
       const permResult = await Utils.handlePermissionCheck(scriptObject);
 
@@ -414,6 +423,29 @@ const ScriptRegistry = {
    },
 
    /**
+    * Fills UserStyle type and @match from @-moz-document when the header omitted them.
+    * @private
+    */
+   _inferUserstyleMetadata(script) {
+      const userCode = script.userCode || '';
+      if (!userCode) return;
+
+      const parsed = MetadataParser.parse(userCode);
+      if (!script.type || script.type === 'userscript') {
+         if (parsed.type === 'userstyle') script.type = 'userstyle';
+      }
+
+      const meta = script.meta || {};
+      const hasMatch = [].concat(meta.match || [], meta.include || []).some(Boolean);
+      if (hasMatch) return;
+
+      const inferred = Utils.extractMatchPatternsFromStyle(userCode);
+      if (inferred.length) {
+         script.meta = { ...meta, match: inferred };
+      }
+   },
+
+   /**
     * Queries scripts matching a specific URL, handling global extension pause states.
     *
     * @param {string} url Target URL.
@@ -452,7 +484,7 @@ const ScriptRegistry = {
          if (isRunnable) return true;
 
          // For popup listing: include if script has a custom exclusion rule matching this URL, OR if meta match rules match this URL
-         const hasMatchingExclusion = (script.customUrls || '')
+         const hasMatchingExclusion = (normalizeCustomUrlsExcludes(script.customUrls) || '')
             .split('\n')
             .map((s) => s.trim())
             .filter((l) => l.startsWith('-'))
@@ -501,8 +533,9 @@ const ScriptRegistry = {
 
       const isSubframe = (sender.frameId ?? 0) !== 0;
 
-      // Filter out @noframes scripts in background when serving subframe requests to reduce IPC payload
+      // Userstyles are injected via StyleInjector (insertCSS), not the JS bootstrap pipeline
       const scriptsForPage = scripts
+         .filter((script) => script.type !== 'userstyle')
          .filter((script) => !isSubframe || !script.meta?.noframes)
          .map((script) => ({
             ...script,
@@ -649,12 +682,14 @@ const ScriptRegistry = {
             }
 
             // Priority #2 - Universal scripting.executeScript fallback
-            await browser.scripting.executeScript({
+            // injectImmediately: bootstrap already raced past document_start; do not wait for document_idle
+            const execOptions = {
                target: {
                   tabId: target.tabId,
                   frameIds: [target.frameId ?? 0],
                },
                world: targetWorld,
+               injectImmediately: true,
                func: (code, isIsolated) => {
                   if (isIsolated) {
                      try {
@@ -725,7 +760,19 @@ const ScriptRegistry = {
                   }
                },
                args: [config.fullCode, targetWorld === 'ISOLATED'],
-            });
+            };
+
+            try {
+               await browser.scripting.executeScript(execOptions);
+            } catch (injectErr) {
+               // Firefox < 128 rejects unknown injectImmediately; retry without it
+               if (execOptions.injectImmediately) {
+                  delete execOptions.injectImmediately;
+                  await browser.scripting.executeScript(execOptions);
+               } else {
+                  throw injectErr;
+               }
+            }
             logger.debug(CONTEXT, `Injection command sent for script ${scriptId} in tab ${target.tabId}.`);
          } else {
             logger.warn(CONTEXT, `Build config failed or produced no code for script ${scriptId}.`);

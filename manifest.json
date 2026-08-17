@@ -1,7 +1,7 @@
 {
    "manifest_version": 3,
    "name": "__MSG_app_name__",
-   "version": "1.0.0",
+   "version": "1.0.1",
    "minimum_chrome_version": "102",
    "default_locale": "en",
    "description": "__MSG_app_description__",
@@ -33,10 +33,14 @@
     ]
    },
    "host_permissions": [
+      "*://greasyfork.org/*",
       "*://update.greasyfork.org/*",
+      "*://sleazyfork.org/*",
       "*://update.sleazyfork.org/*",
       "*://openuserjs.org/*",
       "*://github.com/*",
+      "*://raw.githubusercontent.com/*",
+      "*://gist.githubusercontent.com/*",
       "*://www.userscript.zone/*"
    ],
    "optional_host_permissions": [

@@ -5,7 +5,7 @@
 (() => {
    'use strict';
 
-   if (!window.location.protocol.startsWith('http')) return;
+   if (!window.location.protocol.startsWith('http') && window.location.protocol !== 'file:') return;
 
    // Safe cross-browser extension API namespace lookup
    const browser = (typeof chrome !== 'undefined' && chrome?.runtime)
@@ -39,6 +39,7 @@
       // Downlink: Messages received FROM the background script
       GM_API_RESPONSE: 'gm-api-response',
       GM_XMLHTTPREQUEST_CALLBACK: 'gm-xmlhttprequest-callback',
+      EVENT_REEVALUATE_TAB_SCRIPTS: 'event-reevaluate-tab-scripts',
 
       // Bridge: Internal handshake messages between bootstrap and gm-api-provider
       BRIDGE_HANDSHAKE: `${PREFIX.BRIDGE}handshake`,
@@ -79,13 +80,6 @@
 
    // Active userscript token map: scriptId -> pageToken
    const activeTokens = new Map();
-
-   // Define messages that are strictly reserved for internal bootstrap logic
-   const BOOTSTRAP_ONLY_MESSAGES = new Set([
-      MSG.GET_TAB_SCRIPTS,
-      MSG.EXECUTE_SCRIPT_IN_TAB,
-      MSG.GET_LOG_LEVEL
-   ]);
 
    // Teardown event listeners and invalidate state when extension is updated/reloaded
    function cleanupOrphanedBootstrap() {
@@ -200,34 +194,8 @@
          return;
       }
 
-      const isApiResponse = type === MSG.GM_API_RESPONSE;
-      const isEvent = type?.startsWith(PREFIX.EVENT);
-
-      // Block malicious pages from spoofing untokenized bootstrap commands
-      if (!type || isApiResponse || isEvent || BOOTSTRAP_ONLY_MESSAGES.has(type)) {
-         return;
-      }
-
-      log.debug('Uplink RX from page:', type);
-
-      sendRuntimeMessageWithRetry(data)
-         .then(response => {
-            if (!response && isOrphaned) return;
-
-            if (data.transactionId) {
-               source.postMessage({
-                  extensionId: EXTENSION_ID,
-                  type: MSG.GM_API_RESPONSE,
-                  transactionId: data.transactionId,
-                  response: response ?? null,
-               }, '*');
-            }
-         })
-         .catch(error => {
-            if (!error?.message?.includes('Receiving end does not exist') && !error?.message?.includes('Extension context invalidated')) {
-               log.error('Uplink error:', error);
-            }
-         });
+      // Handshake only. GM APIs and logs must use CustomEvent litemonkey-up-${token}.
+      return;
    }
 
    /**
@@ -241,6 +209,11 @@
 
       const type = message?.type;
       if (!type) return;
+
+      if (type === MSG.EVENT_REEVALUATE_TAB_SCRIPTS) {
+         requestAndInjectScripts().catch(() => { });
+         return;
+      }
 
       const isEvent = type.startsWith(PREFIX.EVENT);
       const isXmlHttpCallback = type === MSG.GM_XMLHTTPREQUEST_CALLBACK;
@@ -266,6 +239,61 @@
             }
          }
       }
+   }
+
+   /**
+    * Fetches matching scripts for the current frame URL and injects any that
+    * have not already been marked. Safe to re-run on History API navigations.
+    */
+   async function requestAndInjectScripts() {
+      if (isOrphaned) return;
+
+      const scriptsResponse = await sendRuntimeMessageWithRetry({
+         type: MSG.GET_TAB_SCRIPTS,
+         payload: { url: window.location.href }
+      });
+
+      if (isOrphaned) return;
+      if (!scriptsResponse?.scripts || scriptsResponse.isPaused) return;
+
+      log.debug(`Received ${scriptsResponse.scripts.length} applicable scripts.`);
+
+      const executionRequests = [];
+
+      for (const script of scriptsResponse.scripts) {
+         if (script.meta?.noframes && !IS_TOP_FRAME) continue;
+
+         const marker = `__LITEMONKEY_INJECTED_${script.id}`;
+         if (window[marker]) continue;
+         window[marker] = true;
+
+         const pageToken = crypto.randomUUID();
+         activeTokens.set(script.id, pageToken);
+
+         window.addEventListener(`litemonkey-up-${pageToken}`, (e) => {
+            handleSecureUplink(e.detail);
+         });
+
+         log.debug(`Requesting execution for: "${script.meta?.name}"`);
+
+         executionRequests.push(
+            sendRuntimeMessageWithRetry({
+               type: MSG.EXECUTE_SCRIPT_IN_TAB,
+               payload: {
+                  scriptId: script.id,
+                  target: {
+                     tabId: script.tabId,
+                     frameId: script.frameId
+                  },
+                  injectionContext: {
+                     pageToken,
+                  }
+               },
+            }).catch(() => { })
+         );
+      }
+
+      await Promise.all(executionRequests);
    }
 
    /**
@@ -306,57 +334,7 @@
          // Staggered delays ensure presence announcement reaches late-loaded page context scripts
          [0, 50, 150, 500].forEach(delay => setTimeout(announceReady, delay));
 
-         // Use retry helper to guarantee fetch of scripts even if SW was sleeping
-         const scriptsResponse = await sendRuntimeMessageWithRetry({
-            type: MSG.GET_TAB_SCRIPTS,
-            payload: { url: window.location.href }
-         });
-
-         if (isOrphaned) return;
-
-         if (scriptsResponse?.scripts && !scriptsResponse.isPaused) {
-            log.debug(`Received ${scriptsResponse.scripts.length} applicable scripts.`);
-
-            // Declare executionRequests array in main scope before loop
-            const executionRequests = [];
-
-            for (const script of scriptsResponse.scripts) {
-               if (script.meta?.noframes && !IS_TOP_FRAME) continue;
-
-               // Global flag prevents multiple injections in case of frame re-attaches
-               const marker = `__LITEMONKEY_INJECTED_${script.id}`;
-               if (window[marker]) continue;
-               window[marker] = true;
-
-               const pageToken = crypto.randomUUID();
-               activeTokens.set(script.id, pageToken);
-
-               window.addEventListener(`litemonkey-up-${pageToken}`, (e) => {
-                  handleSecureUplink(e.detail);
-               });
-
-               log.debug(`Requesting execution for: "${script.meta?.name}"`);
-
-               executionRequests.push(
-                  sendRuntimeMessageWithRetry({
-                     type: MSG.EXECUTE_SCRIPT_IN_TAB,
-                     payload: {
-                        scriptId: script.id,
-                        target: {
-                           tabId: script.tabId,
-                           frameId: script.frameId
-                        },
-                        injectionContext: {
-                           pageToken,
-                        }
-                     },
-                  }).catch(() => { })
-               );
-            }
-
-            // Dispatch injection requests in parallel
-            await Promise.all(executionRequests);
-         }
+         await requestAndInjectScripts();
       } catch (err) {
          if (!err?.message?.includes('Extension context invalidated')) {
             log.error('Initialization failed:', err?.message ?? err);

@@ -138,11 +138,11 @@ $theme-darken-gray: (
 $spacing: (
    "0": 0,          // 0px
    "px": 1px,       // 1px (for fine-tuning borders, etc.)
-   "0.5": space(0.5), // 2px
+   "0-5": space(0.5), // 2px
    "1": space(1),   // 4px (xs)
-   "1.5": space(1.5), // 6px
+   "1-5": space(1.5), // 6px
    "2": space(2),   // 8px (sm)
-   "2.5": space(2.5), // 10px
+   "2-5": space(2.5), // 10px
    "3": space(3),   // 12px (md)
    "4": space(4),   // 16px (lg)
    "5": space(5),   // 20px

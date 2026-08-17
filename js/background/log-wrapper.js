@@ -23,7 +23,7 @@ export function generateLogWrapperCode({ scriptId, pageToken, areLogsMutedGlobal
       areLogsMutedGlobally: Boolean(areLogsMutedGlobally),
       isScriptMuted: Boolean(isScriptMuted),
       LOG_MESSAGE_TYPE: MSG.LOG_MESSAGE,
-      EXTENSION_ID: browser.runtime.id,
+      EXTENSION_ID: browser?.runtime?.id,
    };
 
    return `(($) => {
@@ -49,12 +49,15 @@ export function generateLogWrapperCode({ scriptId, pageToken, areLogsMutedGlobal
       };
       const postLog = (logEntry) => {
          try {
-            window.postMessage({
-               extensionId: $.EXTENSION_ID,
-               pageToken: $.pageToken,
-               type: $.LOG_MESSAGE_TYPE,
-               payload: { scriptId: $.scriptId, log: logEntry },
-            }, '*');
+            const eventName = 'litemonkey-up-' + $.pageToken;
+            window.dispatchEvent(new CustomEvent(eventName, {
+               detail: {
+                  extensionId: $.EXTENSION_ID,
+                  pageToken: $.pageToken,
+                  type: $.LOG_MESSAGE_TYPE,
+                  payload: { scriptId: $.scriptId, log: logEntry },
+               }
+            }));
          } catch (e) {
             nativeConsole.error('[LiteMonkey Logger] Failed to post log:', e);
          }

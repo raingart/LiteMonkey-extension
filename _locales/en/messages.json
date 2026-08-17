@@ -71,6 +71,9 @@
    "installer_error_no_meta": {
       "message": "Error: This does not appear to be a valid userscript (missing @name)"
    },
+   "installer_error_invalid_type": {
+      "message": "Error: The URL did not return JavaScript (the server sent a web page or another non-script type)"
+   },
    "installer_error_fetch_failed": {
       "message": "Error: Failed to download the script"
    },
@@ -170,7 +173,10 @@
       "message": "Failed to update the script status."
    },
    "popup_btn_pause_all": {
-      "message": "Enable or pause all scripts"
+      "message": "Pause all scripts"
+   },
+   "popup_btn_resume_all": {
+      "message": "Resume all scripts"
    },
    "popup_btn_open_options": {
       "message": "Open Options"
@@ -299,6 +305,9 @@
    },
    "opt_btn_agee_storage_data_agree_edit": {
       "message": "Allow editing of raw storage data"
+   },
+   "opt_storage_load_failed": {
+      "message": "Could not load GM storage. Editing is disabled so existing data is not overwritten."
    },
    "opt_btn_agee_storage_data_agree_edit_tooltip": {
       "message_old": "I understand that editing this data may break the script",

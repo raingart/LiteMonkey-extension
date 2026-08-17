@@ -96,6 +96,7 @@ export const MSG = Object.freeze({
       'EVENT_VALUE_CHANGED',          // Broadcasts GM_storage changes across tabs
       'EVENT_LOG_LEVEL_UPDATE',       // Background notifies bridge of log level change
       'EVENT_TAB_CLOSED',
+      'EVENT_REEVALUATE_TAB_SCRIPTS',
    ]),
 
    // Channel: Internal System Messages

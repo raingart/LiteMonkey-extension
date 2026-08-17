@@ -1,5 +1,7 @@
 import Dexie from './libs/dexie.min.mjs';
 import { logger } from './libs/logger.js';
+import { normalizeCustomUrlsExcludes } from './libs/origin-guard.js';
+import { MAX_STORAGE_VALUE_SIZE_BYTES, MAX_STORAGE_KEYS_PER_SCRIPT } from './constants.js';
 
 const CONTEXT = 'Database';
 const DB_NAME = 'LiteMonkeyDB';
@@ -241,7 +243,20 @@ class ScriptRepository {
       const script = await this.getMeta(cleanId);
       if (!script) throw new Error(`Script with ID ${cleanId} not found.`);
 
-      const newValues = Object.entries(storageObject).map(([key, value]) => ({
+      const entries = Object.entries(storageObject || {});
+      if (entries.length > MAX_STORAGE_KEYS_PER_SCRIPT) {
+         throw new Error(`Script has reached the storage limit of ${MAX_STORAGE_KEYS_PER_SCRIPT} keys.`);
+      }
+
+      const encoder = new TextEncoder();
+      for (const [key, value] of entries) {
+         const valueSize = encoder.encode(JSON.stringify(value)).length;
+         if (valueSize > MAX_STORAGE_VALUE_SIZE_BYTES) {
+            throw new Error(`Value for key "${key}" exceeds the ${MAX_STORAGE_VALUE_SIZE_BYTES / 1024 / 1024}MB size limit.`);
+         }
+      }
+
+      const newValues = entries.map(([key, value]) => ({
          uuid: script.uuid,
          key,
          value,
@@ -289,6 +304,7 @@ class ScriptRepository {
          createdAt = now,
          updatedAt = now,
          customUrls = null,
+         sourceUrl = null,
          meta = {},
          config = {},
          state = {},
@@ -308,7 +324,8 @@ class ScriptRepository {
          type,
          createdAt,
          updatedAt,
-         customUrls,
+         customUrls: typeof customUrls === 'string' ? normalizeCustomUrlsExcludes(customUrls) : customUrls,
+         sourceUrl,
 
          // Calculate byte size using Blob to handle UTF-8 / multi-byte character strings accurately
          size: new Blob([userCode]).size,

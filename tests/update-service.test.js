@@ -23,6 +23,10 @@ describe('UpdateService compareSemanticVersions Tests', () => {
       // Comparing pre-releases numerically
       assert.strictEqual(compareSemanticVersions('1.0.0-alpha', '1.0.0-beta'), 1);
       assert.strictEqual(compareSemanticVersions('1.0.0-beta.2', '1.0.0-beta.10'), 1);
+
+      // Installer polarity: compareSemanticVersions(installed, incoming) > 0 means Update
+      assert.ok(compareSemanticVersions('1.0.0-beta', '1.0.0') > 0);
+      assert.ok(compareSemanticVersions('1.0.0', '1.0.0-beta') < 0);
    });
 
    test('should handle variable length version segments', () => {

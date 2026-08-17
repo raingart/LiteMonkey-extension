@@ -3,6 +3,9 @@ import { i18n } from '../../libs/localization.js';
 import { logger } from '../../libs/logger.js';
 import { MetadataParser } from '../../libs/meta-parser.js';
 import { MatchPattern } from '../../libs/match-pattern.js';
+import { extractMatchPatternsFromStyle } from '../../libs/userstyle-rules.js';
+import { evaluateUrlRules } from '../../libs/match-rule.js';
+import { getGrantedApiNames } from '../../gm-grants.js';
 import { MSG } from '../../message-types.js';
 import { TextareaAdapter, CodeMirrorAdapter } from '../../ui/adapters/editor-adapters.js';
 import { sendMessageWithRetry } from '../../libs/message-service.js';
@@ -71,7 +74,19 @@ export class ScriptEditorManager {
    /** @type {number} Generation counter to prevent async race conditions when switching scripts rapidly */
    #loadGeneration = 0;
 
+   /** True after GM storage was successfully loaded for the current script */
+   #storageHydrated = false;
+
+   /** True when the user edited the storage panel for the current script */
+   #storageDirty = false;
+
    #testDebounceTimeout = null; // Debounce timer for pattern tester execution
+
+   /** Skip dirty/panel updates while applying programmatic editor.setValue (load/clear). */
+   #ignoreEditorChange = false;
+
+   /** True when GM_GET_FULL_STORAGE failed; editing is locked so save cannot wipe data. */
+   #storageLoadFailed = false;
 
    /**
     * @param {string} formSelector DOM selector for the editor form
@@ -106,24 +121,41 @@ export class ScriptEditorManager {
       scriptUrls.value = script.customUrls || '';
 
       // Fetch full storage payload in 1 atomic IPC roundtrip
-      const { value: storageObject = {} } = await sendMessageWithRetry({
-         type: MSG.GM_GET_FULL_STORAGE,
-         payload: { scriptId: script.id },
-      }).catch((err) => {
+      let storageLoaded = false;
+      let storageObject = {};
+      try {
+         const storageRes = await sendMessageWithRetry({
+            type: MSG.GM_GET_FULL_STORAGE,
+            payload: { scriptId: script.id },
+         });
+         if (storageRes?.success === false) {
+            logger.error(CONTEXT, 'Failed to fetch full storage payload:', storageRes.error);
+         } else {
+            storageObject = storageRes?.value ?? {};
+            storageLoaded = true;
+         }
+      } catch (err) {
          logger.error(CONTEXT, 'Failed to fetch full storage payload:', err);
-         return { value: {} };
-      });
+      }
 
       // Abort if another script selection occurred while fetching storage asynchronously
       if (myGeneration !== this.#loadGeneration) return;
 
+      this.#storageHydrated = storageLoaded;
+      this.#storageDirty = false;
+      this.#storageLoadFailed = !storageLoaded;
+
       if (this.#storageAdapter) {
-         this.#storageAdapter.setValue(tryJSON.stringify(storageObject));
-         this.#storageAdapter.setReadOnly(true); // Always lock storage editing by default on file load
+         this.#storageAdapter.setValue(storageLoaded ? tryJSON.stringify(storageObject) : '');
+         this.#storageAdapter.setReadOnly(true);
+      }
+
+      if (this.#elements.storageError) {
+         this.#elements.storageError.textContent = storageLoaded ? '' : i18n('opt_storage_load_failed');
       }
 
       if (this.#editorAdapter) {
-         this.#editorAdapter.setValue(script.userCode || '');
+         this.#setEditorValueSilently(script.userCode || '');
          if (this.#editorAdapter instanceof CodeMirrorAdapter) {
             this.#editorAdapter.reconfigure(script.type || 'userscript');
          }
@@ -148,7 +180,11 @@ export class ScriptEditorManager {
       ++this.#loadGeneration; // Invalidate any in-flight asynchronous script loading tasks
       this.#isCreatingNewScript = true;
       this.#currentScript = null;
+      this.#storageHydrated = true;
+      this.#storageDirty = false;
+      this.#storageLoadFailed = false;
       this.#form.reset();
+      if (this.#elements.storageError) this.#elements.storageError.textContent = '';
 
       if (this.#storageAdapter) {
          this.#storageAdapter.setValue('');
@@ -159,10 +195,7 @@ export class ScriptEditorManager {
          this.#elements.storageDataEditCheckbox.checked = false;
       }
 
-      if (this.#editorAdapter) {
-         const placeholder = PLACEHOLDERS[this.#elements.scriptType.value] || PLACEHOLDERS.userscript;
-         this.#editorAdapter.setValue(placeholder);
-      }
+      this.#setEditorValueSilently(PLACEHOLDERS[this.#elements.scriptType.value] || PLACEHOLDERS.userscript);
 
       this.#updateStoragePanelState();
       this.#updateURLRulesPlaceholder();
@@ -187,6 +220,8 @@ export class ScriptEditorManager {
       if (this.#storageAdapter) {
          this.#storageAdapter.setValue(tryJSON.stringify(scriptObject.storage));
       }
+      this.#storageHydrated = true;
+      this.#storageDirty = false;
 
       if (this.#editorAdapter) {
          this.#editorAdapter.setValue(scriptObject.userCode || '');
@@ -257,6 +292,18 @@ export class ScriptEditorManager {
             throw new Error(`Invalid JSON in storage data: ${storageResult.error}`);
          }
 
+         const shouldPersistStorage = !isUserStyle && (
+            this.#storageHydrated || this.#storageDirty || this.#isCreatingNewScript
+         );
+
+         const persistStorage = async (scriptId) => {
+            if (!shouldPersistStorage) return;
+            await sendMessageWithRetry({
+               type: MSG.SET_SCRIPT_STORAGE,
+               payload: { scriptId, storageObject: storageResult.data },
+            });
+         };
+
          const response = await sendMessageWithRetry({ type: MSG.SAVE_SCRIPT, payload: { scriptObject } });
 
          if (!response) {
@@ -272,10 +319,7 @@ export class ScriptEditorManager {
                   this.#currentScript = finalResponse.script;
                   this.#isCreatingNewScript = false;
 
-                  await sendMessageWithRetry({
-                     type: MSG.SET_SCRIPT_STORAGE,
-                     payload: { scriptId: finalResponse.script.id, storageObject: storageResult.data },
-                  });
+                  await persistStorage(finalResponse.script.id);
                   this.#setDirty(false);
                   return { success: true, script: finalResponse.script };
                }
@@ -287,6 +331,7 @@ export class ScriptEditorManager {
                if (finalResponse?.success) {
                   this.#currentScript = finalResponse.script;
                   this.#isCreatingNewScript = false;
+                  await persistStorage(finalResponse.script.id);
                   this.#setDirty(false);
                   return { success: true, script: finalResponse.script, warning: i18n('toast_permission_denied') };
                }
@@ -299,10 +344,7 @@ export class ScriptEditorManager {
             this.#currentScript = savedScript;
             this.#isCreatingNewScript = false;
 
-            await sendMessageWithRetry({
-               type: MSG.SET_SCRIPT_STORAGE,
-               payload: { scriptId: savedScript.id, storageObject: storageResult.data },
-            });
+            await persistStorage(savedScript.id);
 
             this.#setDirty(false);
             return { success: true, script: savedScript };
@@ -349,7 +391,7 @@ export class ScriptEditorManager {
    resolveScriptURLRules(scriptType, userCode, meta, urlsInputValue) {
       const metaMatches = [].concat(meta.match || [], meta.include || []);
       const metaExcludes = [].concat(meta.exclude || []);
-      const styleMatches = this.#extractMatchPatternsFromStyle(userCode);
+      const styleMatches = extractMatchPatternsFromStyle(userCode);
       const defaultMatches = scriptType === 'userstyle' && styleMatches.length ? styleMatches : metaMatches;
 
       if (urlsInputValue.trim()) {
@@ -451,6 +493,11 @@ export class ScriptEditorManager {
          toggleWordWrapBtn.classList.toggle('active', isWordWrapEnabled);
       }
       this.#editorAdapter.setWordWrap(isWordWrapEnabled);
+      this.#editorAdapter.onChange(() => {
+         if (this.#ignoreEditorChange) return;
+         this.#setDirty(true);
+         this.#updateStoragePanelState();
+      });
    }
 
    /**
@@ -497,6 +544,7 @@ export class ScriptEditorManager {
 
       this.#elements.formatBtn?.addEventListener('click', () => this.#formatCode());
       this.#elements.scriptType?.addEventListener('change', () => this.#onScriptTypeChange());
+      // Storage panel also updates from editor onChange when @grant lines change.
       this.#elements.storageDataEditCheckbox?.addEventListener('change', () => {
          const isEditable = this.#elements.storageDataEditCheckbox.checked;
 
@@ -512,8 +560,8 @@ export class ScriptEditorManager {
       if (this.#storageAdapter) {
          this.#storageAdapter.onChange(() => {
             this.#validateJson();
-            // Mark editor dirty when raw storage JSON is modified by user to prevent silent data loss
             if (this.#elements.storageDataEditCheckbox?.checked) {
+               this.#storageDirty = true;
                this.#setDirty(true);
             }
          });
@@ -669,6 +717,15 @@ export class ScriptEditorManager {
       return script;
    }
 
+   #setEditorValueSilently(code) {
+      this.#ignoreEditorChange = true;
+      try {
+         this.#editorAdapter?.setValue(code);
+      } finally {
+         this.#ignoreEditorChange = false;
+      }
+   }
+
    /**
     * Updates editor dirty (unsaved changes) state.
     * @private
@@ -693,9 +750,10 @@ export class ScriptEditorManager {
       const isPristinePlaceholder = Object.values(PLACEHOLDERS).some((p) => p.trim() === currentCode);
       if (this.#isCreatingNewScript && isPristinePlaceholder) {
          const newPlaceholder = PLACEHOLDERS[this.#elements.scriptType.value] || '';
-         this.#editorAdapter.setValue(newPlaceholder);
+         this.#setEditorValueSilently(newPlaceholder);
          this.#setDirty(false);
       }
+      this.#updateStoragePanelState();
    }
 
    /**
@@ -709,11 +767,12 @@ export class ScriptEditorManager {
          return;
       }
       const { meta } = MetadataParser.parse(this.#editorAdapter.getValue());
-      const grants = [].concat(meta?.grant || []);
-      const hasStorageGrant = grants.includes('GM_setValue') || grants.includes('GM_getValue');
+      const allowed = getGrantedApiNames(meta?.grant);
+      const hasStorageGrant = allowed.has('GM_setValue') || allowed.has('GM_getValue');
+      const canEditStorage = hasStorageGrant && !this.#storageLoadFailed;
       storagePanel.style.display = hasStorageGrant ? '' : 'none';
-      storageDataEditCheckbox.disabled = !hasStorageGrant;
-      if (!hasStorageGrant) {
+      storageDataEditCheckbox.disabled = !canEditStorage;
+      if (!canEditStorage) {
          storageDataEditCheckbox.checked = false;
          if (this.#storageAdapter) {
             this.#storageAdapter.setReadOnly(true);
@@ -780,45 +839,11 @@ export class ScriptEditorManager {
          return;
       }
       const { finalMatches, finalExcludes } = this.getCurrentURLRules();
-      const isMatched = finalMatches.length === 0 || finalMatches.some((p) => new MatchPattern(p).toRegex()?.test(url));
-      const isExcluded = finalExcludes.some((p) => new MatchPattern(p).toRegex()?.test(url));
-      const passed = isMatched && !isExcluded;
+      const { isMatched, isExcluded, passed } = evaluateUrlRules(url, finalMatches, finalExcludes);
       testUrlResult.innerHTML = `
          <span class="matched" tooltip="Matched: ${isMatched ? 'Yes' : 'No'}">Matched:${isMatched ? '✅' : '❌'}</span>
          <span class="excluded" tooltip="Excluded: ${isExcluded ? 'Yes' : 'No'}">Excluded:${isExcluded ? '✅' : '❌'}</span>`;
       testUrlResult.title = `Passed: ${passed}\nMatched: ${isMatched}\nExcluded: ${isExcluded}`;
-   }
-
-   /**
-    * Extracts domain match rules from `@-moz-document` sections in UserStyle code.
-    * @private
-    * @param {string} code
-    * @returns {string[]}
-    */
-   #extractMatchPatternsFromStyle(code) {
-      const patterns = new Set();
-      const mozDocumentRegex = /@\-moz\-document\s*([^{]+?)\s*{/g;
-      const domainRegex = /domain\("([^"]+)"\)/g;
-      const urlPrefixRegex = /url-prefix\("([^"]+)"\)/g;
-      let mozMatch;
-      while ((mozMatch = mozDocumentRegex.exec(code)) !== null) {
-         const ruleString = mozMatch[1];
-         let subMatch;
-         domainRegex.lastIndex = 0;
-         while ((subMatch = domainRegex.exec(ruleString)) !== null) {
-            const domain = subMatch[1].trim();
-            if (domain) {
-               patterns.add(`*://${domain}/*`);
-               patterns.add(`*://*.${domain}/*`);
-            }
-         }
-         urlPrefixRegex.lastIndex = 0;
-         while ((subMatch = urlPrefixRegex.exec(ruleString)) !== null) {
-            const prefix = subMatch[1].trim();
-            if (prefix) patterns.add(`${prefix}*`);
-         }
-      }
-      return Array.from(patterns);
    }
 
    /**
@@ -854,7 +879,7 @@ export class ScriptEditorManager {
       const excludes = [].concat(meta.exclude || []);
 
       if (scriptType === 'userstyle' && matches.length === 0) {
-         matches = this.#extractMatchPatternsFromStyle(userCode);
+         matches = extractMatchPatternsFromStyle(userCode);
       }
 
       const formattedRules = [...matches, ...excludes.map((ex) => `-${ex}`)].join('\n');

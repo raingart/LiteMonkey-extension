@@ -11,8 +11,7 @@ const INSTALLER_RULE_ID = 1;
  * Domains excluded from dynamic declarativeNetRequest interception.
  */
 const EXCLUDED_DOMAINS = [
-   // 'github.com',
-   // 'raw.githubusercontent.com',
+   'github.com',
    'gitlab.com',
    'pastebin.com',
 ];
@@ -84,4 +83,5 @@ const UserScriptInterceptor = {
 };
 
 // WARNING: Exported as default object (`UserScriptInterceptor`). Maintain default import syntax in consumers.
+export { USER_SCRIPT_REGEX, EXCLUDED_DOMAINS };
 export default UserScriptInterceptor;

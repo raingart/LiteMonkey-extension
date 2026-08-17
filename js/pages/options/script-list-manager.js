@@ -120,6 +120,10 @@ export class ScriptListManager {
       this.#updateListView();
    }
 
+   get areLogsMutedGlobally() {
+      return this.#areLogsMutedGlobally;
+   }
+
    /**
     * Updates selected item state in the DOM without re-rendering the full list.
     * @param {number|string|null} scriptId

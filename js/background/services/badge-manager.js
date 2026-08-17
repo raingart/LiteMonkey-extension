@@ -73,7 +73,7 @@ const updateBadgeForTab = async (tabId) => {
       const tab = await browser.tabs.get(tabId);
 
       // Clear badge for internal/privileged browser URLs where userscripts cannot execute
-      if (isRestrictedUrl(tab?.url)) {
+      if (!tab?.url || isRestrictedUrl(tab.url)) {
          return clearBadge(tabId);
       }
 
@@ -83,7 +83,7 @@ const updateBadgeForTab = async (tabId) => {
          return setPausedBadge(tabId);
       }
 
-      const scriptCount = scripts.length;
+      const scriptCount = scripts.filter((script) => script.type !== 'userstyle').length;
 
       if (scriptCount > 0) {
          await setBadge(tabId, scriptCount);

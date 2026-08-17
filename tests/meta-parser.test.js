@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { test, describe } from 'node:test';
-import { MetadataParser } from '../js/libs/meta-parser.js';
+import { MetadataParser, META_HEADER_SEARCH_LIMIT } from '../js/libs/meta-parser.js';
 
 describe('MetadataParser Tests', () => {
    test('should parse standard userscript metadata directives', () => {
@@ -85,5 +85,16 @@ console.log('hello');
       assert.ok(block.includes('// @noframes'));
       assert.ok(block.includes('// @resource logo https://example.com/logo.png'));
       assert.ok(block.includes('// ==/UserScript=='));
+   });
+
+   test('should parse a header after a short preamble but ignore one buried in HTML', () => {
+      const preamble = `#!/usr/bin/env node\n/* license */\n`;
+      const header = `// ==UserScript==\n// @name Near Start\n// ==/UserScript==\n`;
+      const { meta } = MetadataParser.parse(preamble + header);
+      assert.strictEqual(meta.name, 'Near Start');
+
+      const buried = `${'x'.repeat(META_HEADER_SEARCH_LIMIT + 1)}${header}`;
+      const buriedResult = MetadataParser.parse(buried);
+      assert.strictEqual(buriedResult.meta.name, undefined);
    });
 });
